@@ -1,6 +1,7 @@
 import torch
 
-from src.utils import CONSTANTS, box_to_xy
+from src.utils import CONSTANTS
+from src.data.transforms import box_to_xy
 from scipy.optimize import linear_sum_assignment
 
 def l_hung(labs, lab_preds, bbox, bbox_preds):
@@ -36,8 +37,6 @@ def l_hung(labs, lab_preds, bbox, bbox_preds):
     loss_label = -lab_preds.gather(2, labs.unsqueeze(-1)).squeeze(-1) # [bz x N]
     loss_label = loss_label.mean() # Only consider non-empty objects
     loss_bbox = l_box(bbox, bbox_preds, final_mask) # L_box loss
-
-    print(loss_label, loss_bbox)
 
     return loss_label + loss_bbox
 

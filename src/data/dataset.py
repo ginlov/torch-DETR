@@ -1,0 +1,135 @@
+import torch
+import os
+import json
+
+from src.data import transforms as T
+from abc import ABC, abstractmethod
+from src.utils import CONSTANTS
+from PIL import Image
+
+class DETRDataset(torch.utils.data.Dataset, ABC):
+    @abstractmethod
+    def __init__(self):
+        pass
+
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, idx):
+        bboxes = self.boxes[idx]
+        labels = self.labels[idx]
+        if not isinstance(bboxes, torch.Tensor):
+            bboxes = torch.tensor(bboxes, dtype=torch.float32)
+        if not isinstance(labels, torch.Tensor):
+            labels = torch.tensor(labels, dtype=torch.int64)
+        images = self.images[idx]
+        targets = {
+            'boxes': bboxes,  # [N, 4]
+            'labels': labels,  # [N]
+        }
+        images, targets = self.transform(images, targets)
+        return images, targets
+    
+class SFCHDDataset(DETRDataset):
+    def __init__(self, folder_path, partition: str = 'train'):
+        super(SFCHDDataset, self).__init__()
+        self._folder_path = folder_path
+        pass
+
+# TODO: Implement transform function for boxes and images
+class CPPE5Dataset(DETRDataset):
+    def __init__(self, folder_path, partition: str = 'train', transform=None):
+        super(CPPE5Dataset, self).__init__()
+        self._folder_path = folder_path
+
+        ## Get metdata and image paths
+        if partition == 'train':
+            metadata_path = os.path.join(self._folder_path, 'annotations', 'train.json')
+        elif partition == 'val':
+            metadata_path = os.path.join(self._folder_path, 'annotations', 'test.json')
+        else:
+            raise ValueError(f"Invalid partition: {partition}. Must be 'train' or 'val'.")
+        image_folder = os.path.join(self._folder_path, 'images')
+
+        ## Checking images
+        images_list = os.listdir(image_folder)
+        not_image_files = len([f for f in images_list if not f.lower().endswith(CONSTANTS.IMAGE_EXTENSIONS)]) != 0
+        assert not not_image_files, f"Some files in {image_folder} are not images."
+
+        ## Load metdata
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+
+        ## Check images in metadata
+        self.image_metadata = sorted(metadata['images'], key=lambda x: x['id'])
+        image_in_metadata = [item['file_name'] for item in self.image_metadata]
+        image_not_exist = len([f for f in image_in_metadata if f not in images_list]) != 0
+        assert not image_not_exist, "Some images in metadata do not exist in the image folder."
+
+        ## Intialize normalization transform
+        if not transform:
+            # Default transform: Used in DETR
+            # Code is borrowed from DETR repo. Thanks to Facebook AI Research.
+            normalize = T.Compose([
+                T.ToTensor(),
+                T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ])
+
+            scales = [480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800]
+
+            if partition == 'train':
+                transform = T.Compose([
+                    T.RandomHorizontalFlip(),
+                    T.RandomSelect(
+                        T.RandomResize(scales, max_size=1333),
+                        T.Compose([
+                            T.RandomResize([400, 500, 600]),
+                            T.RandomSizeCrop(384, 600),
+                            T.RandomResize(scales, max_size=1333),
+                        ])
+                    ),
+                    normalize,
+                ])
+
+            if partition == 'val':
+                transform = T.Compose([
+                    T.RandomResize([800], max_size=1333),
+                    normalize,
+                ])
+
+        self.transform = transform
+
+        ## Load images
+        ## TODO: Lazy load images
+        self.images = []
+        for img_path in self.image_metadata:
+            img_path = os.path.join(image_folder, img_path['file_name'])
+            image = Image.open(img_path).convert("RGB")
+            self.images.append(image)
+
+        ## Load categories metadata
+        self.categories_metadata = metadata['categories']
+
+        ## Load boxes and labels
+        self.annotation = sorted(metadata['annotations'], key=lambda x: x['image_id'])
+        self.boxes = [[]]*len(self.image_metadata)
+        self.labels = [[]]*len(self.image_metadata)
+        for item in self.annotation:
+            image_id = item['image_id']
+            bbox = item['bbox']
+
+            # TODO: Reorder image_id for comprehensiveness
+            self.boxes[image_id-1].append(bbox) # image_id starts from 1
+            self.labels[image_id-1].append(item['category_id']) # image_id starts from 1
+
+def collate_fn(batch):
+    images = torch.stack([item['image'] for item in batch], dim=0)  # [batch_size, 3, H, W]
+    boxes = torch.stack([item['boxes'] for item in batch], dim=0)  # [batch_size, N, 4]
+    labels = torch.stack([item['labels'] for item in batch])  # [batch_size, N]
+
+    return {
+        'images': images,
+        'boxes': boxes,
+        'labels': labels,
+        'masks': None
+    }

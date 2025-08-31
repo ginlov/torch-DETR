@@ -125,18 +125,19 @@ class Transformer(torch.nn.Module):
             DecoderLayer(d_model, nhead, dim_feedforward, dropout) for _ in range(num_decoder_layers)
         ])
 
-    def forward(self, src, pos_encoding, query_embedding): # query embedding is learnt positional encoding as described in the DETR paper
+    def forward(self, src, pos_encoding, query_embedding, key_mask: torch.Tensor = None): # query embedding is learnt positional encoding as described in the DETR paper
         """
-        src: Input tensor of shape (N, d_model, H x W)
-        pos_encoding: Positional encoding tensor of shape (N, d_model, H x W)
-        query_embedding: Query embedding tensor of shape (num_queries, d_model)
+        src: Input tensor of shape (N, H x W, d_model)
+        mask: Mask tensor of shape (N, H x W)
+        pos_encoding: Positional encoding tensor of shape (N, H x W, d_model)
+        query_embedding: Query embedding tensor of shape (N, num_queries, d_model)
         """
         tgt = torch.zeros_like(query_embedding)  # Initialize target with zeros as described in the DETR paper
         for layer in self.encoder:
-            src = layer(src, positional_encoding=pos_encoding)
+            src = layer(src, positional_encoding=pos_encoding, key_mask=key_mask)
 
         for layer in self.decoder:
-            tgt = layer(tgt, src, positional_encoding=query_embedding, encoder_positional_encoding=pos_encoding)
+            tgt = layer(tgt, src, positional_encoding=query_embedding, encoder_positional_encoding=pos_encoding, key_mask=key_mask)
         
         return tgt
 
@@ -161,7 +162,17 @@ class DecoderLayer(torch.nn.Module):
         self.norm2 = torch.nn.LayerNorm(d_model)
         self.norm3 = torch.nn.LayerNorm(d_model)
 
-    def forward(self, tgt, memory, positional_encoding=None, encoder_positional_encoding=None):
+    def forward(self, tgt, memory, positional_encoding=None, encoder_positional_encoding=None, key_mask: torch.Tensor = None):
+        """
+        tgt: Target tensor of shape (N, num_queries, d_model)
+        memory: Memory tensor from the encoder of shape (N, H x W, d_model)
+        positional_encoding: Positional encoding tensor for the target of shape (N, num_queries, d_model)
+        encoder_positional_encoding: Positional encoding tensor for the memory of shape (N, H x W, d_model)
+        key_mask: Mask tensor for the memory of shape (N, H x W)
+
+        Returns:
+            torch.Tensor: The output tensor of shape (N, num_queries, d_model)
+        """
         # tgt: N x T x E
         # memory: N x S x E
         if positional_encoding is not None:
@@ -183,7 +194,7 @@ class DecoderLayer(torch.nn.Module):
             tgt_with_pos = tgt
 
         # Multihead attention with memory
-        tgt2 = self.multihead_attn(tgt_with_pos, mem_with_enc_pos, memory)[0]
+        tgt2 = self.multihead_attn(tgt_with_pos, mem_with_enc_pos, memory, key_mask)[0]
         tgt = tgt + self.dropout(tgt2)
         tgt = self.norm2(tgt)
 
@@ -214,18 +225,19 @@ class EncoderLayer(torch.nn.Module):
         self.norm1 = torch.nn.LayerNorm(d_model)
         self.norm2 = torch.nn.LayerNorm(d_model)
         
-    def forward(self, src, positional_encoding=None):
+    def forward(self, src, positional_encoding=None, key_mask: torch.Tensor = None):
         """
-        src: Input tensor of shape (N, d_model, H x W)
-        positional_encoding: Optional positional encoding tensor of shape (N, d_model, H x W)
+        src: Input tensor of shape (N, H x W, d_model)
+        mask: Mask tensor of shape (N, H x W)
+        positional_encoding: Optional positional encoding tensor of shape (N, H x W, d_model)
         """
         # src: N x S x E
         # positional_encoding: N x S x E (optional)
         if positional_encoding is not None:
             src_with_pos = src + positional_encoding
-            src2 = self.self_attn(src_with_pos, src_with_pos, src)[0]
+            src2 = self.self_attn(src_with_pos, src_with_pos, src, key_mask)[0]
         else:
-            src2 = self.self_attn(src, src, src)[0]
+            src2 = self.self_attn(src, src, src, key_mask)[0]
         src = src + self.dropout(src2)
         src = self.norm1(src)
         # Feedforward with 1x1 conv: (N, S, E) -> (N, E, S) for Conv1d

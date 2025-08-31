@@ -27,23 +27,28 @@ class DETR(torch.nn.Module):
         self.class_embed = torch.nn.Linear(d_model, num_classes)
         self.bbox_embed = torch.nn.Linear(d_model, 4)  # 4 for bounding box coordinates
 
-    def forward(self, x):
+    def forward(self, x, mask: torch.Tensor=None):
         """
         Forward pass of the DETR model.
         
         Args:
             x (torch.Tensor): Input tensor. (N, 3, H0, W0)
+            mask (torch.Tensor): Mask tensor. (N, H0, W0) 1 is ignore, 0 is keep
             
         Returns:
             tuple: Class predictions and bounding box predictions.
         """
         src = self.backbone(x) # N x backbone.out_channels x H0/32 x W0/32 = N x backbond.out_channels x H x W
+        if mask is not None:
+            mask = torch.nn.functional.interpolate(mask[None].float(), size=src.shape[-2:]).to(torch.bool)[0].flatten(1) # N x (H * W) # interpolate to the size of src
         src = self.conv_project(src) # N x d_model x H x W
+
+        ## Positional encoding is fixed, so no need to pass mask
         pos_encoding = self.positional_encoding(src).flatten(2).permute(0, 2, 1) # N x (H*W) x d_model
         src = src.flatten(2).permute(0, 2, 1) # N x (H*W) x d_model
 
         ## Feed to transformer
-        tgt = self.transformer(src, pos_encoding, self.query_embedding.weight.repeat(x.size(0), 1, 1)) # N x num_queries x d_model
+        tgt = self.transformer(src, pos_encoding, self.query_embedding.weight.repeat(x.size(0), 1, 1), mask) # N x num_queries x d_model
 
         class_preds = self.class_embed(tgt)
         bbox_preds = self.bbox_embed(tgt)

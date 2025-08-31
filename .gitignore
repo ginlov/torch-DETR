@@ -208,3 +208,6 @@ __marimo__/
 
 # Unnecessary notebooks
 *.ipynb
+
+# Assets folder
+assets/
