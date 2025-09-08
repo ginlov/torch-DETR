@@ -36,11 +36,12 @@ class SFCHDDataset(DETRDataset):
         self._folder_path = folder_path
         pass
 
-# TODO: Implement transform function for boxes and images
 class CPPE5Dataset(DETRDataset):
     def __init__(self, folder_path, partition: str = 'train', transform=None):
         super(CPPE5Dataset, self).__init__()
         self._folder_path = folder_path
+
+        assert os.path.exists(self._folder_path), f"Folder path {self._folder_path} does not exist."
 
         ## Get metdata and image paths
         if partition == 'train':
@@ -112,24 +113,31 @@ class CPPE5Dataset(DETRDataset):
 
         ## Load boxes and labels
         self.annotation = sorted(metadata['annotations'], key=lambda x: x['image_id'])
-        self.boxes = [[]]*len(self.image_metadata)
-        self.labels = [[]]*len(self.image_metadata)
+        num_images = len(self.image_metadata)
+        self.boxes = [[]]*num_images
+        self.labels = [[]]*num_images
         for item in self.annotation:
             image_id = item['image_id']
             bbox = item['bbox']
 
-            # TODO: Reorder image_id for comprehensiveness
-            self.boxes[image_id-1].append(bbox) # image_id starts from 1
-            self.labels[image_id-1].append(item['category_id']) # image_id starts from 1
+            if image_id <= num_images: # train and validation images for CPPE dataset are located in the same folder
+                # TODO: Reorder image_id for comprehensiveness
+                self.boxes[image_id-1].append(bbox) # image_id starts from 1
+                self.labels[image_id-1].append(item['category_id']) # image_id starts from 1
 
 def collate_fn(batch):
-    images = torch.stack([item['image'] for item in batch], dim=0)  # [batch_size, 3, H, W]
-    boxes = torch.stack([item['boxes'] for item in batch], dim=0)  # [batch_size, N, 4]
-    labels = torch.stack([item['labels'] for item in batch])  # [batch_size, N]
+    images = [item[0] for item in batch] # various sizes
+    targets = [item[1] for item in batch] # various number of boxes for each image
 
-    return {
-        'images': images,
-        'boxes': boxes,
-        'labels': labels,
-        'masks': None
-    }
+    # Batch images
+    max_w = max([img.shape[2] for img in images])
+    max_h = max([img.shape[1] for img in images])
+    batch_size = len(images)
+    batched_imgs = torch.zeros((batch_size, 3, max_h, max_w), dtype=images[0].dtype)
+    masks = torch.ones((batch_size, max_h, max_w), dtype=torch.bool)
+    for i in range(batch_size):
+        img = images[i]
+        batched_imgs[i, :, :img.shape[1], :img.shape[2]] = img
+        masks[i, :img.shape[1], :img.shape[2]] = False
+
+    return images, targets
