@@ -1,9 +1,9 @@
 from typing import Any
-from cvrunner.runner import BaseRunner
+from cvrunner.runner import TrainRunner
 from cvrunner.experiment import BaseExperiment
 
 # TODO: fill in the run logic
-class DETRRunner(BaseRunner):
+class DETRRunner(TrainRunner):
     def __init__(
             self,
             experiment: type[BaseExperiment]

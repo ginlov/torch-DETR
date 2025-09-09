@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.optim import Optimizer, AdamW
 from torch.optim.lr_scheduler import _LRScheduler, LinearLR
 
-from cvrunner.experiment import BaseExperiment, DataBatch
+from cvrunner.experiment import BaseExperiment, DataBatch, MetricType
 from cvrunner.runner import BaseRunner
 
 from experiment.detr_config import DETRConfig
@@ -27,6 +27,10 @@ class DETRExperiment(BaseExperiment):
     def runner_cls(self) -> Type[BaseRunner]:
         return DETRRunner
 
+    @property
+    def wandb_project(self) -> str:
+        return "DETR"
+    
     @property
     def backbone_name(self) -> str:
         return 'resnet50'
@@ -115,7 +119,7 @@ class DETRExperiment(BaseExperiment):
             loss_function: DETRLoss,
             optimizer: Optimizer,
             lr_scheduler: _LRScheduler
-            ) -> None:
+            ) -> MetricType:
         # TODO: correct this logic
         output = model(data_batch)
         loss = loss_function(output, data_batch['target'])
