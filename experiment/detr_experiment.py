@@ -1,12 +1,16 @@
 import torch
+import os
 
 from typing import Tuple, Type
 from torch.utils.data import DataLoader, Dataset
 from torch.optim import Optimizer, AdamW
 from torch.optim.lr_scheduler import _LRScheduler, LinearLR
+from pathlib import Path
+from abc import ABC
 
 from cvrunner.experiment import BaseExperiment, DataBatch, MetricType
 from cvrunner.runner import BaseRunner
+from cvrunner.utils.logger import get_cv_logger
 
 from experiment.detr_config import DETRConfig
 from src.detr.detr import build_detr
@@ -14,7 +18,9 @@ from src.data.dataset import CPPE5Dataset, collate_fn
 from src.losses.loss import DETRLoss
 from runner.detr_runner import DETRRunner
 
-class DETRExperiment(BaseExperiment):
+logger = get_cv_logger()
+
+class DETRExperiment(BaseExperiment, ABC):
     """
     The experiment should be stateless
     """
@@ -23,7 +29,6 @@ class DETRExperiment(BaseExperiment):
             ) -> None:
         pass
 
-    @property
     def runner_cls(self) -> Type[BaseRunner]:
         return DETRRunner
 
@@ -75,12 +80,6 @@ class DETRExperiment(BaseExperiment):
             dim_feedforward=self.detr_config.dim_feedforward,
             dropout=self.detr_config.dropout
         )
-    
-    def build_dataset(self, partition: str) -> Dataset:
-        return CPPE5Dataset(
-            folder_path=self.data_folder,
-            partition=partition
-        )
 
     def build_dataloader(self, partition: str) -> DataLoader:
         dataset = self.build_dataset(partition=partition)
@@ -118,9 +117,11 @@ class DETRExperiment(BaseExperiment):
             data_batch: DataBatch, 
             loss_function: DETRLoss,
             optimizer: Optimizer,
-            lr_scheduler: _LRScheduler
+            lr_scheduler: _LRScheduler,
+            device: torch.device
             ) -> MetricType:
         # TODO: correct this logic
+        data_batch = {k: v.to(device) for k, v in data_batch.items()}
         output = model(data_batch)
         loss = loss_function(output, data_batch['target'])
         loss.backward()
@@ -133,11 +134,14 @@ class DETRExperiment(BaseExperiment):
     def val_epoch_start(self):
         pass
 
-    def val_step(self,
-        model: torch.nn.Module,
-        data_batch: DataBatch,
-        loss_function: torch.nn.Module,
-        criterion: torch.nn.Module) -> None:
+    def val_step(
+            self,
+            model: torch.nn.Module,
+            data_batch: DataBatch,
+            loss_function: torch.nn.Module,
+            criterion: torch.nn.Module,
+            device: torch.device
+            ) -> None:
         pass
 
     def val_epoch_end(self):
