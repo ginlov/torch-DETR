@@ -2,6 +2,7 @@ import torch
 
 from torch.nn import functional as F
 from torchvision.ops import FrozenBatchNorm2d
+from src.utils import init_weights
 
 def get_backbone(backbone_name) -> torch.nn.Module:
     """
@@ -161,6 +162,7 @@ class DecoderLayer(torch.nn.Module):
         self.norm1 = torch.nn.LayerNorm(d_model)
         self.norm2 = torch.nn.LayerNorm(d_model)
         self.norm3 = torch.nn.LayerNorm(d_model)
+        self.apply(init_weights)
 
     def forward(self, tgt, memory, positional_encoding=None, encoder_positional_encoding=None, key_mask: torch.Tensor = None):
         """
@@ -224,6 +226,7 @@ class EncoderLayer(torch.nn.Module):
         self.conv2 = torch.nn.Conv1d(dim_feedforward, d_model, kernel_size=1)
         self.norm1 = torch.nn.LayerNorm(d_model)
         self.norm2 = torch.nn.LayerNorm(d_model)
+        self.apply(init_weights)
         
     def forward(self, src, positional_encoding=None, key_mask: torch.Tensor = None):
         """
@@ -261,6 +264,7 @@ class FFN(torch.nn.Module):
         self.linear1 = torch.nn.Linear(d_model, hidden_dim)
         self.linear2 = torch.nn.Linear(hidden_dim, hidden_dim)
         self.linear3 = torch.nn.Linear(hidden_dim, d_out)
+        self.apply(init_weights)
         
     def forward(self, x):
         # x: N x T x E

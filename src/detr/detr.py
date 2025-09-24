@@ -1,6 +1,7 @@
 import torch
 
 from src.detr.layers import get_positional_encoding, get_backbone, Transformer
+from src.utils import init_weights
 
 class DETR(torch.nn.Module):
     """
@@ -26,6 +27,12 @@ class DETR(torch.nn.Module):
         # Initialize the classification and bounding box prediction heads
         self.class_embed = torch.nn.Linear(d_model, num_classes + 1)  # +1 for "no object" class
         self.bbox_embed = torch.nn.Linear(d_model, 4)  # 4 for bounding box coordinates
+
+        # Initialize weights to make training consistent
+        self.conv_project.apply(init_weights)
+        self.query_embedding.apply(init_weights)
+        self.class_embed.apply(init_weights)
+        self.bbox_embed.apply(init_weights)
 
     def forward(self, x, mask: torch.Tensor=None):
         """
