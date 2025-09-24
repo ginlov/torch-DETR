@@ -1,6 +1,9 @@
 from typing import Any
 from cvrunner.runner import TrainRunner
 from cvrunner.experiment import BaseExperiment
+from cvrunner.utils.logger import get_cv_logger
+
+logger = get_cv_logger()
 
 # TODO: fill in the run logic
 class DETRRunner(TrainRunner):
@@ -8,39 +11,34 @@ class DETRRunner(TrainRunner):
             self,
             experiment: type[BaseExperiment]
             ):
-        self.experiment = experiment
-        
-        # build model
-        self.model = self.experiment.build_model()
-        
-        # build loss function
-        self.loss_function = self.experiment.build_loss_function()
-
-        # build data loader
-        self.train_dataloader = self.experiment.build_dataloader(partition='train')
-        self.val_dataloader = self.experiment.build_dataloader(partition='val')
-
-        # build optimizer
-        self.optimizer, self.lr_scheduler = self.experiment.build_optimizer_scheduler(self.model)
+        super().__init__(experiment=experiment)
+        logger.info(f'Model config: {self.experiment.detr_config}')
 
     def run(self):
+        logger.info(f'Starting training for {self.experiment.num_epochs} epochs...')
         num_epoch = self.experiment.num_epochs
         val_freq = self.experiment.val_freq
         for epoch in range(num_epoch):
+            logger.info(f'Starting epoch {epoch+1}/{num_epoch}...')
             self.train_epoch_start()
             self.train_epoch()
             self.train_epoch_end()
+            logger.info(f'Finished epoch {epoch+1}/{num_epoch}.')
 
             if epoch % val_freq == 0:
+                logger.info(f'Starting validation for epoch {epoch+1}/{num_epoch}...')
                 self.val_epoch_start()
                 self.val_epoch()
                 self.val_epoch_end()
+                logger.info(f'Finished validation for epoch {epoch+1}/{num_epoch}.')
 
     def train_epoch_start(self):
         pass
 
     def train_epoch(self):
-        for data in self.train_dataloader:
+        num_step = len(self.train_dataloader)
+        for i, data in enumerate(self.train_dataloader):
+            logger.info(f'Training step {i+1}/{num_step}...')
             self.train_step(data)
 
     def train_epoch_end(self):
@@ -55,23 +53,6 @@ class DETRRunner(TrainRunner):
 
     def val_epoch_end(self):
         pass
-
-    def train_step(self, data: Any):
-        self.experiment.train_step(
-            self.model,
-            data,
-            self.loss_function,
-            self.optimizer,
-            self.lr_scheduler
-        )
-
-    def val_step(self, data: Any):
-        self.experiment.val_step(
-            self.model,
-            data,
-            self.loss_function,
-            None
-        )
 
     def checkpoint(self):
         pass

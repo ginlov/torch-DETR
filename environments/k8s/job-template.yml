@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: cvrunner-job-   # unique per run
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600   # clean up after 10 minutes
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: cvrunner
+        image: __IMAGE__            # placeholder
+        workingDir: __WORKING_DIR__
+        args: ["-l", "--exp", "__EXP__"]
+        env:
+          - name: JOB_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+            cpu: "2"
+            memory: "16Gi"
+          limits:
+            nvidia.com/gpu: 1
+            cpu: "4"
+            memory: "32Gi"
+        volumeMounts:
+          - name: dshm
+            mountPath: /dev/shm
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 16Gi   # <-- set shm size here

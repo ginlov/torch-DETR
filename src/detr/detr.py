@@ -24,7 +24,7 @@ class DETR(torch.nn.Module):
         self.query_embedding = torch.nn.Embedding(num_queries, d_model)
         
         # Initialize the classification and bounding box prediction heads
-        self.class_embed = torch.nn.Linear(d_model, num_classes)
+        self.class_embed = torch.nn.Linear(d_model, num_classes + 1)  # +1 for "no object" class
         self.bbox_embed = torch.nn.Linear(d_model, 4)  # 4 for bounding box coordinates
 
     def forward(self, x, mask: torch.Tensor=None):

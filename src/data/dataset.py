@@ -37,7 +37,7 @@ class SFCHDDataset(DETRDataset):
         pass
 
 class CPPE5Dataset(DETRDataset):
-    def __init__(self, folder_path, partition: str = 'train', transform=None):
+    def __init__(self, folder_path, partition: str = 'train', transform=None, sanity_check: bool = False):
         super(CPPE5Dataset, self).__init__()
         self._folder_path = folder_path
 
@@ -125,6 +125,16 @@ class CPPE5Dataset(DETRDataset):
                 self.boxes[image_id-1].append(bbox) # image_id starts from 1
                 self.labels[image_id-1].append(item['category_id']) # image_id starts from 1
 
+        if sanity_check:
+            if partition == 'train':
+                self.images = self.images[:100]
+                self.boxes = self.boxes[:100]
+                self.labels = self.labels[:100]
+            else:
+                self.images = self.images[:20]
+                self.boxes = self.boxes[:20]
+                self.labels = self.labels[:20]
+
 def collate_fn(batch):
     images = [item[0] for item in batch] # various sizes
     targets = [item[1] for item in batch] # various number of boxes for each image
@@ -133,11 +143,15 @@ def collate_fn(batch):
     max_w = max([img.shape[2] for img in images])
     max_h = max([img.shape[1] for img in images])
     batch_size = len(images)
-    batched_imgs = torch.zeros((batch_size, 3, max_h, max_w), dtype=images[0].dtype)
+    batched_imgs = torch.zeros((batch_size, 3, max_h, max_w), dtype=images[0].dtype) # [bz, 3, max_h, max_w]
     masks = torch.ones((batch_size, max_h, max_w), dtype=torch.bool)
     for i in range(batch_size):
         img = images[i]
         batched_imgs[i, :, :img.shape[1], :img.shape[2]] = img
         masks[i, :img.shape[1], :img.shape[2]] = False
 
-    return images, targets
+    return {
+        "images": batched_imgs,
+        "masks": masks,
+        "targets": targets
+    }

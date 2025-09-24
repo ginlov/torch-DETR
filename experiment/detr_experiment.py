@@ -1,11 +1,9 @@
 import torch
-import os
 
 from typing import Tuple, Type
 from torch.utils.data import DataLoader, Dataset
 from torch.optim import Optimizer, AdamW
 from torch.optim.lr_scheduler import _LRScheduler, LinearLR
-from pathlib import Path
 from abc import ABC
 
 from cvrunner.experiment import BaseExperiment, DataBatch, MetricType
@@ -14,8 +12,9 @@ from cvrunner.utils.logger import get_cv_logger
 
 from experiment.detr_config import DETRConfig
 from src.detr.detr import build_detr
-from src.data.dataset import CPPE5Dataset, collate_fn
+from src.data.dataset import collate_fn
 from src.losses.loss import DETRLoss
+from src.utils import pad_targets
 from runner.detr_runner import DETRRunner
 
 logger = get_cv_logger()
@@ -31,6 +30,10 @@ class DETRExperiment(BaseExperiment, ABC):
 
     def runner_cls(self) -> Type[BaseRunner]:
         return DETRRunner
+    
+    @property
+    def sanity_check(self) -> bool:
+        return False
 
     @property
     def wandb_project(self) -> str:
@@ -54,11 +57,11 @@ class DETRExperiment(BaseExperiment, ABC):
     
     @property
     def data_folder(self) -> str:
-        return 'assets/CPPE-5'
+        return ''
     
     @property
     def batch_size(self) -> int:
-        return 128
+        return 2
     
     @property
     def weight_decay(self) -> float:
@@ -121,12 +124,15 @@ class DETRExperiment(BaseExperiment, ABC):
             device: torch.device
             ) -> MetricType:
         # TODO: correct this logic
-        data_batch = {k: v.to(device) for k, v in data_batch.items()}
-        output = model(data_batch)
-        loss = loss_function(output, data_batch['target'])
+        images = data_batch['images'].to(device)
+        masks = data_batch['masks'].to(device)
+        label, boxes = pad_targets(data_batch['targets'], self.num_queries)
+        output = model(images, masks)
+        loss = loss_function(label.to(device), output[0], boxes.to(device), output[1])
         loss.backward()
         optimizer.step()
         lr_scheduler.step()
+        return {'loss': loss.item()}
 
     def train_epoch_end(self):
         pass

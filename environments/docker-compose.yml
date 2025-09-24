@@ -1,0 +1,12 @@
+services:
+  cvrunner:
+    shm_size: "16gb"
+    build: 
+      context: ..
+      dockerfile: environments/Dockerfile
+    image: cvrunner-local:latest
+    working_dir: /workspace
+    env_file:
+      - ../.env
+    stdin_open: true
+    tty: true
