@@ -96,7 +96,13 @@ class DETRExperiment(BaseExperiment, ABC):
 
     def build_optimizer_scheduler(self, model: torch.nn.Module) -> Tuple[Optimizer, _LRScheduler]:
         # TODO: separate parameters to different groups as in DETR paper
-        optimizer = AdamW(model.parameters(), weight_decay=self.weight_decay)
+        backbone_params = list(p for _, p in model.backbone.named_parameters() if p.requires_grad)
+        other_params = list(p for n, p in model.named_parameters() if not n.startswith("backbone.") and p.requires_grad)
+
+        optimizer = AdamW([
+            {"params": backbone_params, "lr": 1e-5},
+            {"params": other_params, "lr": 1e-4},
+        ], weight_decay=self.weight_decay)
         # TODO: change the schuduler to the exact config in DETR paper
         lr_scheduler = LinearLR(optimizer)
         return (optimizer, lr_scheduler)

@@ -120,10 +120,10 @@ class CPPE5Dataset(DETRDataset):
             image_id = item['image_id']
             bbox = item['bbox']
 
-            if image_id <= num_images: # train and validation images for CPPE dataset are located in the same folder
-                # TODO: Reorder image_id for comprehensiveness
-                self.boxes[image_id-1].append(bbox) # image_id starts from 1
-                self.labels[image_id-1].append(item['category_id']) # image_id starts from 1
+            # TODO: Reorder image_id for comprehensiveness
+            offset = 1 if partition == 'train' else 1001
+            self.boxes[image_id-offset].append(bbox) # image_id starts from 1
+            self.labels[image_id-offset].append(item['category_id']) # image_id starts from 1
 
         if sanity_check:
             if partition == 'train':

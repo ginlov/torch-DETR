@@ -19,6 +19,14 @@ class DETRCPPE5Experiment(DETRExperiment):
         return 'cppe5-' + datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     
     @property
+    def sanity_check(self) -> bool:
+        return True
+    
+    @property
+    def num_epochs(self) -> int:
+        return 50 if not self.sanity_check else 5
+    
+    @property
     def num_classes(self) -> int:
         return 5  # CPPE-5 has 5 classes
     
