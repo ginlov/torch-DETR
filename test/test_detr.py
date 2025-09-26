@@ -14,7 +14,7 @@ def test_detr_forward_shapes():
     model = build_detr('resnet50', num_classes=91, num_queries=100)
     dummy_input = torch.randn(2, 3, 224, 224)
     class_preds, bbox_preds = model(dummy_input)
-    assert class_preds.shape == (2, 100, 91)
+    assert class_preds.shape == (2, 100, 91+1) # including background class
     assert bbox_preds.shape == (2, 100, 4)
 
 def test_detr_no_nan_or_inf():
