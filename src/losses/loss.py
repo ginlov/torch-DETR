@@ -1,7 +1,7 @@
 import torch
 
 from src.utils import CONSTANTS
-from src.data.transforms import box_to_xy
+from src.data.transforms import box_to_xy, box_iou, box_iou_matrix
 from scipy.optimize import linear_sum_assignment
 
 def l_hung(labs, lab_preds, bbox, bbox_preds):
@@ -77,21 +77,8 @@ def iou_loss(bbox, bbox_preds, mask):
     bbox_xy = box_to_xy(bbox)
     bbox_preds_xy = box_to_xy(bbox_preds)
 
-    # Intersection
-    inter_x1 = torch.max(bbox_xy[:, 0], bbox_preds_xy[:, 0])
-    inter_y1 = torch.max(bbox_xy[:, 1], bbox_preds_xy[:, 1])
-    inter_x2 = torch.min(bbox_xy[:, 2], bbox_preds_xy[:, 2])
-    inter_y2 = torch.min(bbox_xy[:, 3], bbox_preds_xy[:, 3])
-    inter_w = (inter_x2 - inter_x1).clamp(min=0)
-    inter_h = (inter_y2 - inter_y1).clamp(min=0)
-    inter_area = inter_w * inter_h
-
-    # Union
-    area1 = (bbox_xy[:, 2] - bbox_xy[:, 0]).clamp(min=0) * (bbox_xy[:, 3] - bbox_xy[:, 1]).clamp(min=0)
-    area2 = (bbox_preds_xy[:, 2] - bbox_preds_xy[:, 0]).clamp(min=0) * (bbox_preds_xy[:, 3] - bbox_preds_xy[:, 1]).clamp(min=0)
-    union_area = area1 + area2 - inter_area + 1e-8
-
-    iou = inter_area / union_area
+    # Compute IoU
+    iou = box_iou(bbox_xy, bbox_preds_xy)
     loss = 1 - iou
     return loss.mean()
 
@@ -162,35 +149,11 @@ class HungarianMatcher(torch.nn.Module):
             cost_bbox = torch.cdist(pred_bbox, tgt_bbox, p=1)  # [N_pred, N_gt]
 
             # IoU cost (1 - IoU)
-            pred_boxes_xy = torch.zeros_like(pred_bbox)
-            tgt_boxes_xy = torch.zeros_like(tgt_bbox)
-            pred_boxes_xy[:, 0] = pred_bbox[:, 0] - pred_bbox[:, 2] / 2
-            pred_boxes_xy[:, 1] = pred_bbox[:, 1] - pred_bbox[:, 3] / 2
-            pred_boxes_xy[:, 2] = pred_bbox[:, 0] + pred_bbox[:, 2] / 2
-            pred_boxes_xy[:, 3] = pred_bbox[:, 1] + pred_bbox[:, 3] / 2
+            pred_boxes_xy = box_to_xy(pred_bbox)
+            tgt_boxes_xy = box_to_xy(tgt_bbox)
 
-            tgt_boxes_xy[:, 0] = tgt_bbox[:, 0] - tgt_bbox[:, 2] / 2
-            tgt_boxes_xy[:, 1] = tgt_bbox[:, 1] - tgt_bbox[:, 3] / 2
-            tgt_boxes_xy[:, 2] = tgt_bbox[:, 0] + tgt_bbox[:, 2] / 2
-            tgt_boxes_xy[:, 3] = tgt_bbox[:, 1] + tgt_bbox[:, 3] / 2
-
-            # Compute pairwise IoU
-            N_pred, N_gt = pred_boxes_xy.shape[0], tgt_boxes_xy.shape[0]
-            iou_matrix = torch.zeros((N_pred, N_gt), device=pred_bbox.device)
-            for i in range(N_pred):
-                for j in range(N_gt):
-                    inter_x1 = torch.max(pred_boxes_xy[i, 0], tgt_boxes_xy[j, 0])
-                    inter_y1 = torch.max(pred_boxes_xy[i, 1], tgt_boxes_xy[j, 1])
-                    inter_x2 = torch.min(pred_boxes_xy[i, 2], tgt_boxes_xy[j, 2])
-                    inter_y2 = torch.min(pred_boxes_xy[i, 3], tgt_boxes_xy[j, 3])
-                    inter_w = (inter_x2 - inter_x1).clamp(min=0)
-                    inter_h = (inter_y2 - inter_y1).clamp(min=0)
-                    inter_area = inter_w * inter_h
-
-                    area1 = (pred_boxes_xy[i, 2] - pred_boxes_xy[i, 0]).clamp(min=0) * (pred_boxes_xy[i, 3] - pred_boxes_xy[i, 1]).clamp(min=0)
-                    area2 = (tgt_boxes_xy[j, 2] - tgt_boxes_xy[j, 0]).clamp(min=0) * (tgt_boxes_xy[j, 3] - tgt_boxes_xy[j, 1]).clamp(min=0)
-                    union_area = area1 + area2 - inter_area + 1e-8
-                    iou_matrix[i, j] = inter_area / union_area
+            # Compute pairwise IoU matrix
+            iou_matrix = box_iou_matrix(pred_boxes_xy, tgt_boxes_xy)
 
             cost_iou = 1 - iou_matrix  # [N_pred, N_gt]
 

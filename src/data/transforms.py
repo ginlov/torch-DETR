@@ -153,6 +153,57 @@ def hflip(img, target):
     target["boxes"] = boxes
     return img, target
 
+def box_iou_matrix(box1: torch.Tensor, box2: torch.Tensor):
+    """
+    Compute the IoU of two sets of boxes. Boxes are expected in [x1, y1, x2, y2] format.
+    
+    Args:
+        box1 (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [N, 4]
+        box2 (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [M, 4]
+        
+    Returns:
+        torch.Tensor: IoU matrix of shape [N, M]
+    """
+    area1 = (box1[:, 2] - box1[:, 0]) * (box1[:, 3] - box1[:, 1])  # [N]
+    area2 = (box2[:, 2] - box2[:, 0]) * (box2[:, 3] - box2[:, 1])  # [M]
+
+    lt = torch.max(box1[:, None, :2], box2[:, :2])  # [N, M, 2]
+    rb = torch.min(box1[:, None, 2:], box2[:, 2:])  # [N, M, 2]
+
+    wh = (rb - lt).clamp(min=0)  # [N, M, 2]
+    inter = wh[:, :, 0] * wh[:, :, 1]  # [N, M]
+
+    union = area1[:, None] + area2 - inter
+
+    iou = inter / union
+    return iou
+
+def box_iou(box1: torch.Tensor, box2: torch.Tensor):
+    """
+    Compute the IoU of two sets of boxes. Boxes are expected in [x1, y1, x2, y2] format.
+    
+    Args:
+        box1 (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [N, 4]
+        box2 (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [N, 4]
+        
+    Returns:
+        torch.Tensor: IoU for each pair of boxes. Shape: [N]
+    """
+    assert box1.shape == box2.shape, "box1 and box2 must have the same shape"
+    area1 = (box1[:, 2] - box1[:, 0]) * (box1[:, 3] - box1[:, 1])  # [N]
+    area2 = (box2[:, 2] - box2[:, 0]) * (box2[:, 3] - box2[:, 1])  # [N]
+
+    lt = torch.max(box1[:, :2], box2[:, :2])  # [N, 2]
+    rb = torch.min(box1[:, 2:], box2[:, 2:])  # [N, 2]
+
+    wh = (rb - lt).clamp(min=0)  # [N, 2]
+    inter = wh[:, 0] * wh[:, 1]  # [N]
+
+    union = area1 + area2 - inter
+
+    iou = inter / union
+    return iou
+
 class BaseTransform(ABC):
     @abstractmethod
     def __init__(self):
