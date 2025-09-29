@@ -3,7 +3,7 @@ import torch
 from typing import Tuple, Type
 from torch.utils.data import DataLoader, Dataset
 from torch.optim import Optimizer, AdamW
-from torch.optim.lr_scheduler import _LRScheduler, LinearLR
+from torch.optim.lr_scheduler import _LRScheduler, LinearLR, ConstantLR
 from abc import ABC
 
 from cvrunner.experiment import BaseExperiment, DataBatch, MetricType
@@ -64,6 +64,10 @@ class DETRExperiment(BaseExperiment, ABC):
         return 2
     
     @property
+    def val_freq(self) -> int:
+        return 2
+    
+    @property
     def weight_decay(self) -> float:
         return 10e-4
 
@@ -95,7 +99,6 @@ class DETRExperiment(BaseExperiment, ABC):
         )
 
     def build_optimizer_scheduler(self, model: torch.nn.Module) -> Tuple[Optimizer, _LRScheduler]:
-        # TODO: separate parameters to different groups as in DETR paper
         backbone_params = list(p for _, p in model.backbone.named_parameters() if p.requires_grad)
         other_params = list(p for n, p in model.named_parameters() if not n.startswith("backbone.") and p.requires_grad)
 
@@ -104,7 +107,7 @@ class DETRExperiment(BaseExperiment, ABC):
             {"params": other_params, "lr": 1e-4},
         ], weight_decay=self.weight_decay)
         # TODO: change the schuduler to the exact config in DETR paper
-        lr_scheduler = LinearLR(optimizer)
+        lr_scheduler = ConstantLR(optimizer)
         return (optimizer, lr_scheduler)
     
     def build_loss_function(self) -> DETRLoss:
@@ -130,6 +133,7 @@ class DETRExperiment(BaseExperiment, ABC):
             device: torch.device
             ) -> MetricType:
         # TODO: correct this logic
+        optimizer.zero_grad()
         images = data_batch['images'].to(device)
         masks = data_batch['masks'].to(device)
         label, boxes = pad_targets(data_batch['targets'], self.num_queries)
@@ -151,10 +155,27 @@ class DETRExperiment(BaseExperiment, ABC):
             model: torch.nn.Module,
             data_batch: DataBatch,
             loss_function: torch.nn.Module,
-            criterion: torch.nn.Module,
-            device: torch.device
+            criterion: torch.nn.Module = None,
+            device: torch.device = torch.device('cpu')
             ) -> None:
-        pass
+        output_dict = {}
+        images = data_batch['images'].to(device)
+        masks = data_batch['masks'].to(device)
+        label, boxes = pad_targets(data_batch['targets'], self.num_queries)
+        label = label.to(device)
+        boxes = boxes.to(device)
+        output = model(images, masks)
+        loss = loss_function(label, output[0], boxes, output[1])
+        output_dict['val/val_loss'] = loss.item()
+        output_dict['labels'] = label
+        output_dict['bboxes'] = boxes
+        output_dict['pred_logits'] = output[0]
+        output_dict['pred_bboxes'] = output[1]
+        if criterion:
+            metrics = criterion(output, data_batch['targets'])
+            metrics = {f'val/{k}': v for k, v in metrics.items()}
+            output_dict.update(metrics)
+        return output_dict
 
     def val_epoch_end(self):
         pass

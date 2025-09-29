@@ -1,12 +1,7 @@
 import torch
 
-from typing import List
 from src.utils import CONSTANTS
 from src.data.transforms import box_iou_matrix, box_to_xy
-
-from cvrunner.utils.logger import get_cv_logger
-
-logger = get_cv_logger()
 
 @torch.no_grad()
 def AP(
@@ -32,7 +27,6 @@ def AP(
         float: AP score
     """
     assert len(labels) == len(bboxes) == len(pred_logits) == len(pred_bboxes), "Length of labels, bboxes, pred_logits and pred_bboxes must be the same"
-    logger.info(f'{labels[0].shape}, {bboxes[0].shape}, {pred_logits[0].shape}, {pred_bboxes[0].shape}')
     all_ap = []
     for c in range(0, num_classes+1):
         if c == CONSTANTS.NO_OBJECT_LABEL:

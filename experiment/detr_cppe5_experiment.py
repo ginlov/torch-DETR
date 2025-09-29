@@ -24,7 +24,7 @@ class DETRCPPE5Experiment(DETRExperiment):
     
     @property
     def num_epochs(self) -> int:
-        return 50 if not self.sanity_check else 5
+        return 50 if not self.sanity_check else 50
     
     @property
     def num_classes(self) -> int:
@@ -52,10 +52,17 @@ class DETRCPPE5Experiment(DETRExperiment):
             kaggle.api.dataset_download_files(dataset, path=parent, unzip=True)
             downloaded_path = os.path.join(parent, os.listdir(parent)[0])
             Path.rename(Path(downloaded_path), Path(self.data_folder))
-        dataset = CPPE5Dataset(
-            folder_path=self.data_folder,
-            partition=partition,
-            sanity_check=self.sanity_check
-        )
+        if partition == 'val' and self.sanity_check:
+            dataset = CPPE5Dataset(
+                folder_path=self.data_folder,
+                partition='train',
+                sanity_check=self.sanity_check
+            )
+        else:
+            dataset = CPPE5Dataset(
+                folder_path=self.data_folder,
+                partition=partition,
+                sanity_check=self.sanity_check
+            )
         logger.info(f'{partition} dataset size: {len(dataset)}')
         return dataset
