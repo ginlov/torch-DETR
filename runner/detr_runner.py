@@ -1,18 +1,21 @@
 import torch
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from cvrunner.runner import TrainRunner
-from cvrunner.experiment import BaseExperiment
 from cvrunner.utils.logger import get_cv_logger
 
 from src.metrics import AP
+from src.utils import _param_norm, _grad_norm
+
+if TYPE_CHECKING:
+    from experiment.detr_experiment import DETRExperiment
 
 logger = get_cv_logger()
 
 class DETRRunner(TrainRunner):
     def __init__(
             self,
-            experiment: type[BaseExperiment]
+            experiment: type["DETRExperiment"]
             ):
         super().__init__(experiment=experiment)
         logger.info(f'Model config: {self.experiment.detr_config}')
@@ -46,6 +49,15 @@ class DETRRunner(TrainRunner):
         for i, data in enumerate(self.train_dataloader):
             logger.info(f'Training step {i+1}/{num_step}...')
             self.train_step(data)
+
+    def train_step(self, data_batch: Any):
+        super().train_step(data_batch)
+        with torch.no_grad():
+            param_norm = _param_norm(self.model)
+            logger.log_metrics(param_norm, local_step=self.step)
+
+            grad_norm = _grad_norm(self.model)
+            logger.log_metrics(grad_norm, local_step=self.step)
 
     def val_epoch_start(self):
         super().val_epoch_start()

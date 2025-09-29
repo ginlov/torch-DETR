@@ -1,6 +1,6 @@
 import torch
 
-from typing import Tuple, Type
+from typing import Tuple, Type, Dict
 from torch.utils.data import DataLoader, Dataset
 from torch.optim import Optimizer, AdamW
 from torch.optim.lr_scheduler import _LRScheduler, LinearLR, ConstantLR
@@ -140,6 +140,7 @@ class DETRExperiment(BaseExperiment, ABC):
         output = model(images, masks)
         loss = loss_function(label.to(device), output[0], boxes.to(device), output[1])
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
         optimizer.step()
         lr_scheduler.step()
         return {'loss': loss.item()}
