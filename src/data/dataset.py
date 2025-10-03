@@ -139,6 +139,11 @@ def collate_fn(batch):
     images = [item[0] for item in batch] # various sizes
     targets = [item[1] for item in batch] # various number of boxes for each image
 
+    targets = {
+        'boxes': [t['boxes'] for t in targets],
+        'labels': [t['labels'] for t in targets]
+    }
+
     # Batch images
     max_w = max([img.shape[2] for img in images])
     max_h = max([img.shape[1] for img in images])

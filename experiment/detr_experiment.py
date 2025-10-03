@@ -1,9 +1,9 @@
 import torch
 
-from typing import Tuple, Type, Dict
-from torch.utils.data import DataLoader, Dataset
+from typing import Tuple, Type
+from torch.utils.data import DataLoader
 from torch.optim import Optimizer, AdamW
-from torch.optim.lr_scheduler import _LRScheduler, LinearLR, ConstantLR
+from torch.optim.lr_scheduler import _LRScheduler, ConstantLR
 from abc import ABC
 
 from cvrunner.experiment import BaseExperiment, DataBatch, MetricType
@@ -14,7 +14,6 @@ from experiment.detr_config import DETRConfig
 from src.detr.detr import build_detr
 from src.data.dataset import collate_fn
 from src.losses.loss import DETRLoss
-from src.utils import pad_targets
 from runner.detr_runner import DETRRunner
 
 logger = get_cv_logger()
@@ -103,7 +102,7 @@ class DETRExperiment(BaseExperiment, ABC):
         other_params = list(p for n, p in model.named_parameters() if not n.startswith("backbone.") and p.requires_grad)
 
         optimizer = AdamW([
-            {"params": backbone_params, "lr": 1e-5},
+            {"params": backbone_params, "lr": 0.0},
             {"params": other_params, "lr": 1e-4},
         ], weight_decay=self.weight_decay)
         # TODO: change the schuduler to the exact config in DETR paper
@@ -136,9 +135,11 @@ class DETRExperiment(BaseExperiment, ABC):
         optimizer.zero_grad()
         images = data_batch['images'].to(device)
         masks = data_batch['masks'].to(device)
-        label, boxes = pad_targets(data_batch['targets'], self.num_queries)
+        # label, boxes = pad_targets(data_batch['targets'], self.num_queries)
         output = model(images, masks)
-        loss = loss_function(label.to(device), output[0], boxes.to(device), output[1])
+        label = [item.to(device) for item in data_batch['targets']['labels']]
+        boxes = [item.to(device) for item in data_batch['targets']['boxes']]
+        loss = loss_function(label, output[0], boxes, output[1])
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
         optimizer.step()
@@ -162,9 +163,8 @@ class DETRExperiment(BaseExperiment, ABC):
         output_dict = {}
         images = data_batch['images'].to(device)
         masks = data_batch['masks'].to(device)
-        label, boxes = pad_targets(data_batch['targets'], self.num_queries)
-        label = label.to(device)
-        boxes = boxes.to(device)
+        label = [item.to(device) for item in data_batch['targets']['labels']]
+        boxes = [item.to(device) for item in data_batch['targets']['boxes']]
         output = model(images, masks)
         loss = loss_function(label, output[0], boxes, output[1])
         output_dict['val/val_loss'] = loss.item()

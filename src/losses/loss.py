@@ -131,7 +131,7 @@ class HungarianMatcher(torch.nn.Module):
         if bbox_preds.dim() == 2:
             bbox_preds = bbox_preds.unsqueeze(0)
 
-        batch_size = labs.shape[0]
+        batch_size = len(labs)
         indices = []
 
         for b in range(batch_size):
@@ -206,8 +206,10 @@ class DETRLoss(torch.nn.Module):
             labs_reordered = labs[i][gt_indices]
             bbox_reordered = bbox[i][gt_indices]
             pad_len = N - len(gt_indices)
-            labs_padded = torch.cat([labs_reordered, torch.full((pad_len,), CONSTANTS.NO_OBJECT_LABEL, dtype=labs.dtype, device=device)])
-            bbox_padded = torch.cat([bbox_reordered, torch.zeros(pad_len, 4, dtype=bbox.dtype, device=device)])
+            lab_dtype = labs.dtype if len(labs) > 9 else torch.int64
+            bbox_dtype = bbox.dtype if len(bbox) > 9 else torch.float32
+            labs_padded = torch.cat([labs_reordered, torch.full((pad_len,), CONSTANTS.NO_OBJECT_LABEL, dtype=lab_dtype, device=device)])
+            bbox_padded = torch.cat([bbox_reordered, torch.zeros(pad_len, 4, dtype=bbox_dtype, device=device)])
             mask = torch.cat([torch.ones(len(gt_indices), device=device), torch.zeros(pad_len, device=device)]) # Mask for background
 
             # Predictions
