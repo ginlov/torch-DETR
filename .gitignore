@@ -212,3 +212,6 @@ wandb/
 
 # Assets folder
 assets/
+
+# pyright setup
+pyrightconfig.json

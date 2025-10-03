@@ -87,3 +87,49 @@ def test_transformer_forward():
     query_embedding = torch.zeros(2, 10, d_model)
     out = transformer(src, pos_encoding, query_embedding)
     assert isinstance(out, torch.Tensor) or (isinstance(out, tuple) and all(isinstance(t, torch.Tensor) for t in out))
+
+def test_transformer_can_overfit_toy_data():
+    torch.manual_seed(42)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Hyperparameters
+    d_model = 32
+    nhead = 4
+    num_encoder_layers = 2
+    num_decoder_layers = 2
+    num_queries = 5
+    seq_len = 10
+    batch_size = 4
+
+    # Create toy data
+    src = torch.randn(batch_size, seq_len, d_model, device=device)
+    pos_encoding = torch.randn(batch_size, seq_len, d_model, device=device)
+    query_embedding = torch.randn(batch_size, num_queries, d_model, device=device)
+    target = torch.randn(batch_size, num_queries, d_model, device=device)
+
+    # Model
+    model = Transformer(
+        d_model=d_model,
+        nhead=nhead,
+        num_encoder_layers=num_encoder_layers,
+        num_decoder_layers=num_decoder_layers,
+        dim_feedforward=64,
+        dropout=0.1
+    ).to(device)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=5e-3)
+    loss_fn = torch.nn.MSELoss()
+
+    # Training loop: try to overfit
+    losses = []
+    for step in range(500):
+        optimizer.zero_grad()
+        output = model(src, pos_encoding, query_embedding)
+        loss = loss_fn(output, target)
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.item())
+
+    print("Initial loss:", losses[0])
+    print("Final loss:", losses[-1])
+    assert losses[-1] < 0.1, "Transformer did not overfit the toy data (final loss too high)"

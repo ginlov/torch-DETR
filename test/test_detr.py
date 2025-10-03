@@ -61,3 +61,79 @@ def test_detr_module_integration():
     dummy_input = torch.randn(1, 3, 224, 224)
     class_preds, bbox_preds = model(dummy_input)
     assert class_preds is not None and bbox_preds is not None
+
+def test_detr_can_overfit_toy_data_frozen_backbone():
+    """
+    Test that the DETR model can overfit a small random dataset (sanity check).
+    """
+    torch.manual_seed(42)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Small model for speed
+    model = build_detr('resnet50', num_classes=5, num_queries=10, d_model=64, nhead=4, num_encoder_layers=1, num_decoder_layers=1, dim_feedforward=128)
+    model.to(device)
+    model.train()
+
+    # Freeze backbone
+    for param in model.backbone.parameters():
+        param.requires_grad = False
+
+    batch_size = 2
+    dummy_input = torch.randn(batch_size, 3, 64, 64, device=device)
+    target_logits = torch.randn(batch_size, 10, 6, device=device)  # 5 classes + 1 no-object
+    target_boxes = torch.randn(batch_size, 10, 4, device=device)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loss_fn = torch.nn.MSELoss()
+
+    losses = []
+    for step in range(1000):
+        optimizer.zero_grad()
+        class_preds, bbox_preds = model(dummy_input)
+        loss = loss_fn(class_preds, target_logits) + loss_fn(bbox_preds, target_boxes)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.01)
+        optimizer.step()
+        losses.append(loss.item())
+
+    print("Initial loss:", losses[0])
+    print("Final loss:", losses[-1])
+    assert losses[-1] < 0.1, "DETR did not overfit the toy data (final loss too high)"
+
+def test_detr_can_overfit_toy_data():
+    """
+    Test that the DETR model can overfit a small random dataset (sanity check).
+    """
+    torch.manual_seed(42)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Small model for speed
+    model = build_detr('resnet50', num_classes=5, num_queries=10, d_model=64, nhead=4, num_encoder_layers=1, num_decoder_layers=1, dim_feedforward=128)
+    model.to(device)
+    model.train()
+
+    batch_size = 2
+    dummy_input = torch.randn(batch_size, 3, 64, 64, device=device)
+    target_logits = torch.randn(batch_size, 10, 6, device=device)  # 5 classes + 1 no-object
+    target_boxes = torch.randn(batch_size, 10, 4, device=device)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loss_fn = torch.nn.MSELoss()
+
+    losses = []
+    for step in range(1000):
+        optimizer.zero_grad()
+        class_preds, bbox_preds = model(dummy_input)
+        loss = loss_fn(class_preds, target_logits) + loss_fn(bbox_preds, target_boxes)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.01)
+        optimizer.step()
+        losses.append(loss.item())
+
+    # Check that the average loss in the last 100 steps is lower than in the first 100 steps
+    N = 100
+    first_avg = sum(losses[:N]) / N
+    last_avg = sum(losses[-N:]) / N
+    print(f"Average loss first {N} steps: {first_avg}")
+    print(f"Average loss last {N} steps: {last_avg}")
+    assert last_avg < first_avg, "Loss did not decrease during training"
