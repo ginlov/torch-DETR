@@ -1,12 +1,13 @@
 import torch
 
+from typing import List
 from src.utils import CONSTANTS
 from src.data.transforms import box_iou_matrix, box_to_xy
 
 @torch.no_grad()
 def AP(
-        labels: torch.Tensor, 
-        bboxes: torch.Tensor, 
+        labels: List[torch.Tensor], 
+        bboxes: List[torch.Tensor], 
         pred_logits: torch.Tensor, 
         pred_bboxes: torch.Tensor, 
         iou_threshold: float = 0.5, 

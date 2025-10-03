@@ -66,14 +66,17 @@ def test_cppe5_collate_fn(cppe5_dataset):
     assert masks.shape[2] == images.shape[3], f"Mask width mismatch: expected {images.shape[3]}, got {masks.shape[2]}."
 
     # Check that targets is a list of dictionaries with correct keys
-    assert isinstance(targets, list), "'targets' is not a list."
-    assert len(targets) == batch_size, f"Targets length mismatch: expected {batch_size}, got {len(targets)}."
-    for target in targets:
-        assert 'boxes' in target, "Target missing 'boxes' key."
-        assert 'labels' in target, "Target missing 'labels' key."
-        assert isinstance(target['boxes'], torch.Tensor), "'boxes' in target is not a torch.Tensor."
-        assert isinstance(target['labels'], torch.Tensor), "'labels' in target is not a torch.Tensor."
-
+    assert isinstance(targets, dict), "'targets' is not a dictioary."
+    assert "boxes" in targets, "'boxes' key missing in targets."
+    assert "labels" in targets, "'labels' key missing in targets."
+    assert len(targets["boxes"]) == batch_size, \
+    f"'boxes' length mismatch: expected {batch_size}, got {len(targets['boxes'])}."
+    assert len(targets["labels"]) == batch_size, \
+    f"'labels' length mismatch: expected {batch_size}, got {len(targets['labels'])}."
+    assert isinstance(targets["boxes"][0], torch.Tensor), \
+    "'boxes' in target is not a torch.Tensor."
+    assert isinstance(targets["labels"][0], torch.Tensor), \
+    "'labels' in target is not a torch.Tensor."
 
 def test_cppe5_dataloader(cppe5_dataset):
     """
@@ -101,12 +104,16 @@ def test_cppe5_dataloader(cppe5_dataset):
         assert masks.shape[2] == images.shape[3], f"Mask width mismatch: expected {images.shape[3]}, got {masks.shape[2]}."
 
         # Check that targets is a list of dictionaries with correct keys
-        assert isinstance(targets, list), "'targets' is not a list."
-        assert len(targets) == batch_size, f"Targets length mismatch: expected {batch_size}, got {len(targets)}."
-        for target in targets:
-            assert 'boxes' in target, "Target missing 'boxes' key."
-            assert 'labels' in target, "Target missing 'labels' key."
-            assert isinstance(target['boxes'], torch.Tensor), "'boxes' in target is not a torch.Tensor."
-            assert isinstance(target['labels'], torch.Tensor), "'labels' in target is not a torch.Tensor."
+        assert isinstance(targets, dict), "'targets' is not a dictionary."
+        assert "boxes" in targets, "'boxes' key missing in targets."
+        assert "labels" in targets, "'labels' key missing in targets."
+        assert len(targets["boxes"]) == batch_size, \
+        f"'boxes' length mismatch: expected {batch_size}, got {len(targets['boxes'])}."
+        assert len(targets["labels"]) == batch_size, \
+        f"'labels' length mismatch: expected {batch_size}, got {len(targets['labels'])}."
+        assert isinstance(targets["boxes"][0], torch.Tensor), \
+        "'boxes' in target is not a torch.Tensor."
+        assert isinstance(targets["labels"][0], torch.Tensor), \
+        "'labels' in target is not a torch.Tensor."
 
         break  # Only test one batch

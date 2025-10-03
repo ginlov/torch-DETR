@@ -1,4 +1,5 @@
 import torch
+import itertools
 
 from typing import Any, TYPE_CHECKING
 from cvrunner.runner import TrainRunner
@@ -82,7 +83,11 @@ class DETRRunner(TrainRunner):
             self.valid_outputs['pred_bboxes'].append(outputs['pred_bboxes'])
 
     def val_epoch_end(self):
-        self.valid_outputs = {k: torch.concat(v, dim=0) for k, v in self.valid_outputs.items()}
+        self.valid_outputs = {
+            k: torch.concat(v, dim=0) if isinstance(v[0], torch.Tensor)
+            else list(itertools.chain.from_iterable(v))
+            for k, v in self.valid_outputs.items()
+        }
         ap_50 = AP(
             labels=self.valid_outputs['labels'],
             bboxes=self.valid_outputs['bboxes'],
