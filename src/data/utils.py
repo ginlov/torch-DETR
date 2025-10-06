@@ -43,7 +43,7 @@ def visualize_output(
 
     for idx, image_id in enumerate(image_ids):
         img = imgs_np[idx]
-        img, _ = unnormalize(img.unsqueeze, None)
+        img, _ = unnormalize(img, None)
         img = img.numpy()
         mask = masks_np[idx][0]
         # If normalized, scale to [0,255]

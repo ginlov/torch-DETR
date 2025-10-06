@@ -312,7 +312,7 @@ class RandomResize(BaseTransform):
             self,
             img,
             target
-    ) -> Tuple[Union[PIL.Image, torch.Tensor], Dict[str, Union[torch.Tensor, Any]]]:
+    ) -> Tuple[Union[PIL.Image.Image, torch.Tensor], Dict[str, Union[torch.Tensor, Any]]]:
         """
         Args:
             img (PIL.Image): The input image to be resized.
