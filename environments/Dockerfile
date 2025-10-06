@@ -3,19 +3,6 @@ FROM oel20/cvrunner-base-amd:latest
 
 # Copy both files if they exist (wildcard makes them optional)
 RUN echo "Test echo"
-RUN apt-get update && apt-get install -y \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgtk-3-dev \
-    libjpeg-dev \
-    libpng-dev \
-    libtiff-dev \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt* poetry.lock* .
 RUN if [ -f requirements.txt ]; then \

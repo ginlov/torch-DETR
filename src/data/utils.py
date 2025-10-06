@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 
 from typing import List, Dict
-from src.data.transforms import box_to_xy
+from src.data.transforms import UnNormalize
 
 @torch.no_grad()
 def visualize_output(
@@ -36,12 +36,15 @@ def visualize_output(
         corresponding visualized images as numpy arrays.
     """
     visualized = {}
+    unnormalize = UnNormalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 
-    imgs_np = imgs.cpu().numpy()
+    imgs_np = imgs.cpu()
     masks_np = masks.unsqueeze(1).cpu().numpy()
 
     for idx, image_id in enumerate(image_ids):
         img = imgs_np[idx]
+        img, _ = unnormalize(img.unsqueeze, None)
+        img = img.numpy()
         mask = masks_np[idx][0]
         # If normalized, scale to [0,255]
         if img.max() <= 1.0:
@@ -52,9 +55,11 @@ def visualize_output(
         img = np.ascontiguousarray(img)
 
         # Draw ground truth boxes (green)
+        _, temp_target = unnormalize(None, {'boxes': gt_bboxes[idx], 'labels': gt_labs[idx]})
+        gt_bboxes[idx] = temp_target['boxes']
         for lab, bbox in zip(gt_labs[idx], gt_bboxes[idx]):
             xyxy = (
-                    box_to_xy(bbox.cpu())
+                    bbox.cpu()
                     .numpy()
                     .astype(int)
                     .tolist()
@@ -71,9 +76,11 @@ def visualize_output(
             )
 
         # Draw predicted boxes (red)
+        _, temp_target = unnormalize(None, {'boxes': out_bboxes[idx], 'labels': out_labs[idx]})
+        out_bboxes[idx] = temp_target['boxes']
         for lab, bbox in zip(out_labs[idx], out_bboxes[idx]):
             xyxy = (
-                    box_to_xy(bbox.cpu())
+                    bbox.cpu()
                     .numpy()
                     .astype(int)
                     .tolist()

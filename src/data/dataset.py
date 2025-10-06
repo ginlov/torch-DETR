@@ -14,7 +14,7 @@ class DETRDataset(torch.utils.data.Dataset, ABC):
 
     def __len__(self):
         return len(self.images)
-    
+
     def __getitem__(self, idx):
         bboxes = self.boxes[idx]
         labels = self.labels[idx]
@@ -30,16 +30,16 @@ class DETRDataset(torch.utils.data.Dataset, ABC):
         images, targets = self.transform(images, targets)
         targets['image_id'] = self.image_metadata[idx]['id']
         return images, targets
-   
+
 class SFCHDDataset(DETRDataset):
     def __init__(self, folder_path, partition: str = 'train'):
-        super(SFCHDDataset, self).__init__()
+        super().__init__()
         self._folder_path = folder_path
         pass
 
 class CPPE5Dataset(DETRDataset):
-    def __init__(self, folder_path, partition: str = 'train', transform=None, sanity_check: bool = False):
-        super(CPPE5Dataset, self).__init__()
+    def __init__(self, folder_path, partition: str = 'train', transform = None, sanity_check: bool = False):
+        super().__init__()
         self._folder_path = folder_path
 
         assert os.path.exists(self._folder_path), f"Folder path {self._folder_path} does not exist."
@@ -55,7 +55,8 @@ class CPPE5Dataset(DETRDataset):
 
         ## Checking images
         images_list = os.listdir(image_folder)
-        not_image_files = len([f for f in images_list if not f.lower().endswith(CONSTANTS.IMAGE_EXTENSIONS)]) != 0
+        not_image_files = len([f for f in images_list 
+            if not f.lower().endswith(CONSTANTS.IMAGE_EXTENSIONS)]) != 0
         assert not not_image_files, f"Some files in {image_folder} are not images."
 
         ## Load metdata

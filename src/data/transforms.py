@@ -1,15 +1,15 @@
 # This file contains custom data transformation classes for image preprocessing and augmentation.
 # This differs from torchvision.transforms as it also handles bounding box transformations.
 # Each transform class implements a __call__ method that takes in an image and an optional target
+from abc import ABC, abstractmethod
+from typing import Dict, Tuple, Any, Union
 
-import torch
-import numpy as np
 import random
+import PIL
+import torch
 
-from PIL import Image
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
-from abc import ABC, abstractmethod
 
 def box_to_xy(bbox):
     """
@@ -93,6 +93,8 @@ def crop(img, target, region):
 def resize(img, target, size, max_size=None):
     """
     Resize the input PIL Image to the given size.
+    Bounding boxes in the target dictionary need to be
+    in the format [x1, y1, x2, y2].
     
     Args:
         img (PIL.Image): The input image to be resized.
@@ -225,19 +227,18 @@ class BaseTransform(ABC):
             img (torch.Tensor): The image after transformation.
             target (dict, optional): The target dictionary which was changed accordingly.
         """
-        pass
 
 class ToTensor(BaseTransform):
     """
     Convert a PIL image to a PyTorch tensor and scale pixel values to [0, 1].
     """
     def __init__(self):
-        super(ToTensor, self).__init__()
+        super().__init__()
 
     def __call__(self, img, target):
         img = F.to_tensor(img)
         return img, target
-    
+
 class Compose(BaseTransform):
     """
     Composes several transforms together.
@@ -247,14 +248,14 @@ class Compose(BaseTransform):
         Args:
             transforms (list): List of transform callables to be applied sequentially.
         """
-        super(Compose, self).__init__()
+        super().__init__()
         self.transforms = transforms
 
     def __call__(self, img, target):
         for t in self.transforms:
             img, target = t(img, target)
         return img, target
-    
+
 class RandomSizeCrop(BaseTransform):
     """
     Crop the given PIL Image to a random size and aspect ratio.
@@ -266,7 +267,7 @@ class RandomSizeCrop(BaseTransform):
             min_size (int): Minimum size of the crop.
             max_size (int): Maximum size of the crop.
         """
-        super(RandomSizeCrop, self).__init__()
+        super().__init__()
         self.min_size = min_size
         self.max_size = max_size
 
@@ -276,7 +277,7 @@ class RandomSizeCrop(BaseTransform):
         region = T.RandomCrop.get_params(img, [h, w])
         return crop(img, target, region)
 
-class RandomSelect:
+class RandomSelect(BaseTransform):
     """
     Randomly select one of the given transforms to apply.
     """
@@ -285,33 +286,43 @@ class RandomSelect:
         Args:
             transforms (list): List of transform callables to choose from.
         """
-        super(RandomSelect, self).__init__()
+        super().__init__()
         self.transforms = transforms
 
     def __call__(self, img, target):
         transform = random.choice(self.transforms)
         return transform(img, target)
-    
-class RandomResize:
+
+class RandomResize(BaseTransform):
     """
     Resize the input PIL Image to a random size from the given list of sizes.
     """
-    def __init__(self, sizes, max_size=None):
+    def __init__(self, sizes, max_size=None) -> None:
         """
         Args:
             sizes (list): List of sizes to choose from.
             max_size (int, optional): Maximum size of the longer side after resizing.
         """
-        super(RandomResize, self).__init__()
+        super().__init__()
         assert isinstance(sizes, (list, tuple))
         self.sizes = sizes
         self.max_size = max_size
 
-    def __call__(self, img, target):
+    def __call__(
+            self,
+            img,
+            target
+    ) -> Tuple[Union[PIL.Image, torch.Tensor], Dict[str, Union[torch.Tensor, Any]]]:
+        """
+        Args:
+            img (PIL.Image): The input image to be resized.
+            target (dict, optional): The target dictionary containing annotations.
+            Bounding boxes need to be in [x1, y1, x2, y2] format.
+        """
         size = random.choice(self.sizes)
         return resize(img, target, size, self.max_size)
 
-class RandomHorizontalFlip:
+class RandomHorizontalFlip(BaseTransform):
     """
     Horizontally flip the given PIL Image randomly with a given probability.
     """
@@ -320,15 +331,15 @@ class RandomHorizontalFlip:
         Args:
             prob (float): Probability of the image being flipped. Default value is 0.5
         """
-        super(RandomHorizontalFlip, self).__init__()
+        super().__init__()
         self.prob = prob
 
     def __call__(self, img, target):
         if random.random() < self.prob:
             return hflip(img, target)
         return img, target
-    
-class RandomCrop:
+
+class RandomCrop(BaseTransform):
     """
     Crop the given PIL Image to a random location with the given size.
     """
@@ -337,14 +348,14 @@ class RandomCrop:
         Args:
             size (tuple): Desired output size of the crop (height, width).
         """
-        super(RandomCrop, self).__init__()
+        super().__init__()
         self.size = size
 
     def __call__(self, img, target):
         region = T.RandomCrop.get_params(img, self.size)
         return crop(img, target, region)
 
-class Normalize:
+class Normalize(BaseTransform):
     """ 
     Normalize a tensor image with mean and standard deviation.
     """
@@ -354,7 +365,7 @@ class Normalize:
             mean (list): Sequence of means for each channel.
             std (list): Sequence of standard deviations for each channel.
         """
-        super(Normalize, self).__init__()
+        super().__init__()
         self.mean = mean
         self.std = std
 
@@ -370,3 +381,43 @@ class Normalize:
             boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
             target["boxes"] = boxes
         return img, target
+
+class UnNormalize(BaseTransform):
+    """ 
+    Unnormalize a tensor image with mean and standard deviation.
+    """
+    def __init__(self, mean, std):
+        """
+        Args:
+            mean (list): Sequence of means for each channel.
+            std (list): Sequence of standard deviations for each channel.
+        """
+        super().__init__()
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, img, target):
+        """
+        Args:
+            img (torch.Tensor): The input image tensor to be unnormalized.
+            target (dict, optional): The target dictionary containing annotations.
+            Bounding boxes need to be in [cx, cy, w, h] format.
+        Returns:
+            img (torch.Tensor): The unnormalized image tensor.
+            target (dict, optional): The target dictionary which was changed accordingly.
+        """
+        if img is not None:
+            img = img.clone()
+            for t, m, s in zip(img, self.mean, self.std):
+                t.mul_(s).add_(m)
+        if target is None:
+            return img, None
+        target = target.copy()
+        h, w = img.shape[-2:]
+        if "boxes" in target:
+            boxes = target["boxes"]
+            boxes = boxes * torch.tensor([w, h, w, h], dtype=torch.float32)
+            boxes = box_to_xy(boxes)
+            target["boxes"] = boxes
+        return img, target
+
