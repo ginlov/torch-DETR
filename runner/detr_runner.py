@@ -6,7 +6,7 @@ from cvrunner.runner import TrainRunner
 from cvrunner.utils.logger import get_cv_logger
 
 from src.metrics import AP
-from src.utils import _param_norm, _grad_norm
+from src.utils import cal_param_norm, cal_grad_norm
 
 if TYPE_CHECKING:
     from experiment.detr_experiment import DETRExperiment
@@ -54,10 +54,10 @@ class DETRRunner(TrainRunner):
     def train_step(self, data_batch: Any):
         super().train_step(data_batch)
         with torch.no_grad():
-            param_norm = _param_norm(self.model)
+            param_norm = cal_param_norm(self.model)
             logger.log_metrics(param_norm, local_step=self.step)
 
-            grad_norm = _grad_norm(self.model)
+            grad_norm = cal_grad_norm(self.model)
             logger.log_metrics(grad_norm, local_step=self.step)
 
     def val_epoch_start(self):
@@ -68,19 +68,24 @@ class DETRRunner(TrainRunner):
         for data in self.val_dataloader:
             self.val_step(data)
 
-    def val_step(self, data_batch: Any):
+    def val_step(self, data: Any):
         with torch.no_grad():
             outputs = self.experiment.val_step(
                 model=self.model,
-                data_batch=data_batch,
+                data_batch=data,
                 loss_function=self.loss_function,
                 device=self.device
             )
-            logger.log_metrics({k: v for k, v in outputs.items() if 'val/' in k}, local_step=self.step)
+            self.val_metrics.update({k: v for k, v in outputs.items() if 'val/' in k})
             self.valid_outputs['labels'].append(outputs['labels'])
             self.valid_outputs['bboxes'].append(outputs['bboxes'])
             self.valid_outputs['pred_logits'].append(outputs['pred_logits'])
             self.valid_outputs['pred_bboxes'].append(outputs['pred_bboxes'])
+            logger.log_images(
+                list(outputs['visualization'].keys()),
+                list(outputs['visualization'].values()),
+                self.step
+            )
 
     def val_epoch_end(self):
         self.valid_outputs = {
@@ -104,5 +109,6 @@ class DETRRunner(TrainRunner):
             iou_threshold=0.75,
             num_classes=self.model.num_classes
         )
-        logger.log_metrics({'val/AP_50': ap_50, 'val/AP_75': ap_75}, local_step=self.step)
+        self.val_metrics.update({'val/AP_50': ap_50, 'val/AP_75': ap_75})
+        logger.log_metrics(self.val_metrics.summary(), local_step=self.step)
         self.valid_outputs = {k: [] for k in self.valid_outputs}

@@ -28,8 +28,9 @@ class DETRDataset(torch.utils.data.Dataset, ABC):
             'labels': labels,  # [N]
         }
         images, targets = self.transform(images, targets)
+        targets['image_id'] = self.image_metadata[idx]['id']
         return images, targets
-    
+   
 class SFCHDDataset(DETRDataset):
     def __init__(self, folder_path, partition: str = 'train'):
         super(SFCHDDataset, self).__init__()
@@ -141,7 +142,8 @@ def collate_fn(batch):
 
     targets = {
         'boxes': [t['boxes'] for t in targets],
-        'labels': [t['labels'] for t in targets]
+        'labels': [t['labels'] for t in targets],
+        'image_id': [t['image_id'] for t in targets]
     }
 
     # Batch images

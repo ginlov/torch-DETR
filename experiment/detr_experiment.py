@@ -13,6 +13,7 @@ from cvrunner.utils.logger import get_cv_logger
 from experiment.detr_config import DETRConfig
 from src.detr.detr import build_detr
 from src.data.dataset import collate_fn
+from src.data.utils import visualize_output
 from src.losses.loss import DETRLoss
 from runner.detr_runner import DETRRunner
 
@@ -139,7 +140,7 @@ class DETRExperiment(BaseExperiment, ABC):
         output = model(images, masks)
         label = [item.to(device) for item in data_batch['targets']['labels']]
         boxes = [item.to(device) for item in data_batch['targets']['boxes']]
-        loss = loss_function(label, output[0], boxes, output[1])
+        loss, _ = loss_function(label, output[0], boxes, output[1])
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
         optimizer.step()
@@ -166,7 +167,7 @@ class DETRExperiment(BaseExperiment, ABC):
         label = [item.to(device) for item in data_batch['targets']['labels']]
         boxes = [item.to(device) for item in data_batch['targets']['boxes']]
         output = model(images, masks)
-        loss = loss_function(label, output[0], boxes, output[1])
+        loss, prediction_output = loss_function(label, output[0], boxes, output[1])
         output_dict['val/val_loss'] = loss.item()
         output_dict['labels'] = label
         output_dict['bboxes'] = boxes
@@ -176,6 +177,33 @@ class DETRExperiment(BaseExperiment, ABC):
             metrics = criterion(output, data_batch['targets'])
             metrics = {f'val/{k}': v for k, v in metrics.items()}
             output_dict.update(metrics)
+
+        ## Visualization
+        image_ids = data_batch['targets']['image_id']
+
+        ## The visualized boxes should be the boxes after Hungarian matching
+        pred_boxes = prediction_output['pred_boxes']
+        pred_labels = prediction_output['pred_labels']
+        gt_boxes = prediction_output['gt_boxes']
+        gt_labels = prediction_output['gt_labels']
+        output_mask = prediction_output['masks']
+        
+        ## Transform to list of valid boxes/lables
+        gt_boxes_list = [gt_boxes[i][output_mask[i]].cpu() for i in range(gt_boxes.size(0))]
+        pred_boxes_list = [pred_boxes[i][output_mask[i]].cpu() for i in range(pred_boxes.size(0))]
+        gt_labels_list = [gt_labels[i][output_mask[i]].cpu() for i in range(gt_labels.size(0))]
+        pred_labels_list = [pred_labels[i][output_mask[i]].cpu() for i in range(pred_labels.size(0))]
+
+        output_images = visualize_output(
+            imgs=images,
+            masks=masks,
+            image_ids=image_ids,
+            out_labs=pred_labels_list,
+            out_bboxes=pred_boxes_list,
+            gt_labs=gt_labels_list,
+            gt_bboxes=gt_boxes_list
+        )
+        output_dict.update({'visualization': output_images})
         return output_dict
 
     def val_epoch_end(self):

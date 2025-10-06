@@ -1,6 +1,6 @@
 import torch
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from scipy.optimize import linear_sum_assignment
 from src.utils import CONSTANTS
 from src.data.transforms import box_to_xy, box_iou, box_iou_matrix
@@ -182,7 +182,7 @@ class DETRLoss(torch.nn.Module):
             lab_preds: torch.Tensor,
             bbox: List[torch.Tensor],
             bbox_preds: torch.Tensor
-    ):
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Compute the DETR loss.
         
@@ -230,4 +230,12 @@ class DETRLoss(torch.nn.Module):
         batched_bbox_preds = torch.stack(batched_bbox_preds) # [bz x N x 4]
         masks = torch.stack(masks).bool() # [bz x N]
 
-        return l_hung(batched_labs, batched_lab_preds, batched_bbox, batched_bbox_preds, masks)
+        prediction_output = {
+            'gt_labels': batched_labs,
+            'pred_labels': batched_lab_preds.argmax(-1),
+            'gt_boxes': batched_bbox,
+            'pred_boxes': batched_bbox_preds,
+            'masks': masks
+        }
+
+        return l_hung(batched_labs, batched_lab_preds, batched_bbox, batched_bbox_preds, masks), prediction_output

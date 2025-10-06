@@ -27,9 +27,8 @@ def init_weights(module):
     elif isinstance(module, torch.nn.Embedding):
         torch.nn.init.normal_(module.weight, mean=0, std=0.01)
 
-    
 @torch.no_grad
-def _param_norm(model: torch.nn.Module) -> Dict:
+def cal_param_norm(model: torch.nn.Module) -> Dict:
     """Compute parameter L2 norm
 
     Args:
@@ -47,7 +46,7 @@ def _param_norm(model: torch.nn.Module) -> Dict:
     return param_norm
 
 @torch.no_grad
-def _grad_norm(model: torch.nn.Module) -> Dict:
+def cal_grad_norm(model: torch.nn.Module) -> Dict:
     """Computer gradient norm
 
     Args:

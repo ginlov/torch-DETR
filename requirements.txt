@@ -1,2 +1,3 @@
 scipy
 kaggle==1.7.4.5
+opencv-python
