@@ -14,6 +14,7 @@ def l_hung(
     ) -> torch.Tensor:
     """
     Compute the matching loss between ground truth and predictions.
+    BBoxes must be in normalized [x1, y1, x2, y2] format.
      
     Args:
         labs (torch.Tensor): Ground truth labels. [bz x N]
@@ -36,6 +37,7 @@ def l_hung(
 def l_box(bbox, bbox_preds, mask):
     """
     Compute the bounding box loss.
+    BBoxes must be in normalized [x1, y1, x2, y2] format.
     
     Args:
         bbox (torch.Tensor): Ground truth bounding boxes. [bz x N x 4]
@@ -52,6 +54,7 @@ def l_box(bbox, bbox_preds, mask):
 def iou_loss(bbox, bbox_preds, mask):
     """
     Compute the IoU loss between ground truth and predicted bounding boxes.
+    BBoxes must be in normalized [x1, y1, x2, y2] format.
     
     Args:
         bbox (torch.Tensor): Ground truth bounding boxes. [bz x N x 4]
@@ -66,18 +69,15 @@ def iou_loss(bbox, bbox_preds, mask):
     bbox = bbox[mask]
     bbox_preds = bbox_preds[mask]
 
-    # Convert [cx, cy, w, h] to [x1, y1, x2, y2]
-    bbox_xy = box_to_xy(bbox)
-    bbox_preds_xy = box_to_xy(bbox_preds)
-
     # Compute IoU
-    iou = box_iou(bbox_xy, bbox_preds_xy)
+    iou = box_iou(bbox, bbox_preds)
     loss = 1 - iou
     return loss.mean()
 
 def L1_loss(bbox, bbox_preds, mask):
     """
     Compute the L1 loss between ground truth and predicted bounding boxes.
+    BBoxes must be in normalized [x1, y1, x2, y2] format.
     
     Args:
         bbox (torch.Tensor): Ground truth bounding boxes. [bz x N x 4]
@@ -112,6 +112,7 @@ class HungarianMatcher(torch.nn.Module):
         ):
         """
         Perform the Hungarian matching between ground truth and predictions.
+        BBoxes must be in normalized [x1, y1, x2, y2] format.
         
         Args:
             # TODO: Don't need to batch the labs input here, since we compute for each
@@ -147,12 +148,8 @@ class HungarianMatcher(torch.nn.Module):
             # L1 bbox cost
             cost_bbox = torch.cdist(pred_bbox, tgt_bbox, p=1)  # [N_pred, N_gt]
 
-            # IoU cost (1 - IoU)
-            pred_boxes_xy = box_to_xy(pred_bbox)
-            tgt_boxes_xy = box_to_xy(tgt_bbox)
-
             # Compute pairwise IoU matrix
-            iou_matrix = box_iou_matrix(pred_boxes_xy, tgt_boxes_xy)
+            iou_matrix = box_iou_matrix(pred_bbox, tgt_bbox)
 
             cost_iou = 1 - iou_matrix  # [N_pred, N_gt]
 
@@ -185,6 +182,7 @@ class DETRLoss(torch.nn.Module):
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Compute the DETR loss.
+        BBoxes must be in normalized [x1, y1, x2, y2] format.
         
         Args:
             labs (List[torch.Tensor]): Ground truth labels. [bz x n_gt], n_gt is different for each 
@@ -206,8 +204,8 @@ class DETRLoss(torch.nn.Module):
             labs_reordered = labs[i][gt_indices]
             bbox_reordered = bbox[i][gt_indices]
             pad_len = N - len(gt_indices)
-            lab_dtype = labs.dtype if len(labs) > 9 else torch.int64
-            bbox_dtype = bbox.dtype if len(bbox) > 9 else torch.float32
+            lab_dtype = labs_reordered.dtype if len(labs_reordered) > 0 else torch.int64
+            bbox_dtype = bbox_reordered.dtype if len(bbox_reordered) > 0 else torch.float32
             labs_padded = torch.cat([labs_reordered, torch.full((pad_len,), CONSTANTS.NO_OBJECT_LABEL, dtype=lab_dtype, device=device)])
             bbox_padded = torch.cat([bbox_reordered, torch.zeros(pad_len, 4, dtype=bbox_dtype, device=device)])
             mask = torch.cat([torch.ones(len(gt_indices), device=device), torch.zeros(pad_len, device=device)]) # Mask for background

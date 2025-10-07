@@ -19,7 +19,7 @@ class DETRDataset(torch.utils.data.Dataset, ABC):
         bboxes = self.boxes[idx]
         labels = self.labels[idx]
         if not isinstance(bboxes, torch.Tensor):
-            bboxes = torch.tensor(bboxes, dtype=torch.float32)
+            bboxes = torch.stack(bboxes, dim=0)
         if not isinstance(labels, torch.Tensor):
             labels = torch.tensor(labels, dtype=torch.int64)
         images = self.images[idx]
@@ -39,6 +39,10 @@ class SFCHDDataset(DETRDataset):
 
 class CPPE5Dataset(DETRDataset):
     def __init__(self, folder_path, partition: str = 'train', transform = None, sanity_check: bool = False):
+        """
+        Original bboxes are in [x_top_left, y_top_left, w, h] format, need to apply box_to_xy to
+        convert to [x1, y1, x2, y2] format.
+        """
         super().__init__()
         self._folder_path = folder_path
 
@@ -116,15 +120,15 @@ class CPPE5Dataset(DETRDataset):
         ## Load boxes and labels
         self.annotation = sorted(metadata['annotations'], key=lambda x: x['image_id'])
         num_images = len(self.image_metadata)
-        self.boxes = [[]]*num_images
-        self.labels = [[]]*num_images
+        self.boxes = [[] for _ in range(num_images)]
+        self.labels = [[] for _ in range(num_images)]
         for item in self.annotation:
             image_id = item['image_id']
             bbox = item['bbox']
 
             # TODO: Reorder image_id for comprehensiveness
             offset = 1 if partition == 'train' else 1001
-            self.boxes[image_id-offset].append(bbox) # image_id starts from 1
+            self.boxes[image_id-offset].append(T.box_to_xy(torch.Tensor(bbox))) # image_id starts from 1
             self.labels[image_id-offset].append(item['category_id']) # image_id starts from 1
 
         if sanity_check:

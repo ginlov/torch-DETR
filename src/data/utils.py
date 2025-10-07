@@ -17,6 +17,7 @@ def visualize_output(
 ) -> Dict[int, np.ndarray]:
     """
     Visualize the output of a model along with ground truth labels and bounding boxes.
+    BBoxes are expected to be in normalized [x1, y1, x2, y2] format.
 
     Args:
         imgs (torch.Tensor): Batch of input images of shape (B, C, H, W).
@@ -43,20 +44,32 @@ def visualize_output(
 
     for idx, image_id in enumerate(image_ids):
         img = imgs_np[idx]
-        img, _ = unnormalize(img, None)
-        img = img.numpy()
+
+        # Concatnate gt_bboxes and out_bboxes for unnormalization
+        if len(gt_bboxes[idx]) > 0 and len(out_bboxes[idx]) > 0:
+            all_bboxes = torch.cat((gt_bboxes[idx], out_bboxes[idx]), dim=0)
+        img, all_bboxes = unnormalize(img, {'boxes': all_bboxes})
+        all_bboxes = all_bboxes['boxes']
+
+        # Split back to gt_bboxes and out_bboxes
+        if len(gt_bboxes[idx]) > 0 and len(out_bboxes[idx]) > 0:
+            gt_bboxes[idx] = all_bboxes[:len(gt_bboxes[idx])]
+            out_bboxes[idx] = all_bboxes[len(gt_bboxes[idx]):]
+        elif len(gt_bboxes[idx]) > 0:
+            gt_bboxes[idx] = all_bboxes
+        elif len(out_bboxes[idx]) > 0:
+            out_bboxes[idx] = all_bboxes
+
+        img = img.permute(1, 2, 0).numpy()
         mask = masks_np[idx][0]
         # If normalized, scale to [0,255]
         if img.max() <= 1.0:
             img = img * 255.0
         img = img.astype(np.uint8)
-        img = np.transpose(img, (1, 2, 0))
-        img[mask == 0] = 0
+        img[mask == 1] = 0
         img = np.ascontiguousarray(img)
 
         # Draw ground truth boxes (green)
-        _, temp_target = unnormalize(None, {'boxes': gt_bboxes[idx], 'labels': gt_labs[idx]})
-        gt_bboxes[idx] = temp_target['boxes']
         for lab, bbox in zip(gt_labs[idx], gt_bboxes[idx]):
             xyxy = (
                     bbox.cpu()
@@ -76,8 +89,6 @@ def visualize_output(
             )
 
         # Draw predicted boxes (red)
-        _, temp_target = unnormalize(None, {'boxes': out_bboxes[idx], 'labels': out_labs[idx]})
-        out_bboxes[idx] = temp_target['boxes']
         for lab, bbox in zip(out_labs[idx], out_bboxes[idx]):
             xyxy = (
                     bbox.cpu()
