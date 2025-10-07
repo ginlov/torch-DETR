@@ -105,10 +105,10 @@ class HungarianMatcher(torch.nn.Module):
     @torch.no_grad()
     def forward(
             self,
-            labs: List[torch.Tensor],
-            lab_preds: torch.Tensor,
-            bbox: List[torch.Tensor],
-            bbox_preds: torch.Tensor
+            labs: List[torch.Tensor], # [bz x n_gt] n_gt is different for each batch item
+            lab_preds: torch.Tensor, # [bz x n_queries x num_classes]
+            bbox: List[torch.Tensor], # [bz x n_gt x 4] n_gt is different for each batch item
+            bbox_preds: torch.Tensor # [bz x n_queries x 4]
         ):
         """
         Perform the Hungarian matching between ground truth and predictions.
@@ -136,7 +136,7 @@ class HungarianMatcher(torch.nn.Module):
         indices = []
 
         for b in range(batch_size):
-            tgt_labels = labs[b].squeeze(-1)  # [n_gt]
+            tgt_labels = labs[b]  # [n_gt]
             pred_logits = lab_preds[b]        # [N, num_classes]
             tgt_bbox = bbox[b]                # [n_gt, 4]
             pred_bbox = bbox_preds[b]         # [N, 4]

@@ -25,8 +25,8 @@ spec:
             memory: "16Gi"
           limits:
             nvidia.com/gpu: 1
-            cpu: "4"
-            memory: "32Gi"
+            cpu: "2"
+            memory: "18Gi"
         volumeMounts:
           - name: dshm
             mountPath: /dev/shm

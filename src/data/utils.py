@@ -48,6 +48,8 @@ def visualize_output(
         # Concatnate gt_bboxes and out_bboxes for unnormalization
         if len(gt_bboxes[idx]) > 0 and len(out_bboxes[idx]) > 0:
             all_bboxes = torch.cat((gt_bboxes[idx], out_bboxes[idx]), dim=0)
+        else:
+            all_bboxes = gt_bboxes[idx] if len(gt_bboxes[idx]) > 0 else out_bboxes[idx]
         img, all_bboxes = unnormalize(img, {'boxes': all_bboxes})
         all_bboxes = all_bboxes['boxes']
 
