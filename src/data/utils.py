@@ -1,9 +1,11 @@
-import torch
+from typing import Dict, List
+
 import cv2
 import numpy as np
+import torch
 
-from typing import List, Dict
 from src.data.transforms import UnNormalize
+
 
 @torch.no_grad()
 def visualize_output(
@@ -13,7 +15,7 @@ def visualize_output(
     out_labs: List[torch.Tensor],
     out_bboxes: List[torch.Tensor],
     gt_labs: List[torch.Tensor],
-    gt_bboxes: List[torch.Tensor]
+    gt_bboxes: List[torch.Tensor],
 ) -> Dict[int, np.ndarray]:
     """
     Visualize the output of a model along with ground truth labels and bounding boxes.
@@ -50,13 +52,13 @@ def visualize_output(
             all_bboxes = torch.cat((gt_bboxes[idx], out_bboxes[idx]), dim=0)
         else:
             all_bboxes = gt_bboxes[idx] if len(gt_bboxes[idx]) > 0 else out_bboxes[idx]
-        img, all_bboxes = unnormalize(img, {'boxes': all_bboxes})
-        all_bboxes = all_bboxes['boxes']
+        img, all_bboxes = unnormalize(img, {"boxes": all_bboxes})
+        all_bboxes = all_bboxes["boxes"]
 
         # Split back to gt_bboxes and out_bboxes
         if len(gt_bboxes[idx]) > 0 and len(out_bboxes[idx]) > 0:
-            gt_bboxes[idx] = all_bboxes[:len(gt_bboxes[idx])]
-            out_bboxes[idx] = all_bboxes[len(gt_bboxes[idx]):]
+            gt_bboxes[idx] = all_bboxes[: len(gt_bboxes[idx])]
+            out_bboxes[idx] = all_bboxes[len(gt_bboxes[idx]) :]
         elif len(gt_bboxes[idx]) > 0:
             gt_bboxes[idx] = all_bboxes
         elif len(out_bboxes[idx]) > 0:
@@ -73,12 +75,7 @@ def visualize_output(
 
         # Draw ground truth boxes (green)
         for lab, bbox in zip(gt_labs[idx], gt_bboxes[idx]):
-            xyxy = (
-                    bbox.cpu()
-                    .numpy()
-                    .astype(int)
-                    .tolist()
-            )
+            xyxy = bbox.cpu().numpy().astype(int).tolist()
             cv2.rectangle(img, (xyxy[0], xyxy[1]), (xyxy[2], xyxy[3]), (0, 255, 0), 2)
             cv2.putText(
                 img,
@@ -87,35 +84,25 @@ def visualize_output(
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (0, 255, 0),
-                2
+                2,
             )
 
         # Draw predicted boxes (red)
         for lab, bbox in zip(out_labs[idx], out_bboxes[idx]):
-            xyxy = (
-                    bbox.cpu()
-                    .numpy()
-                    .astype(int)
-                    .tolist()
+            xyxy = bbox.cpu().numpy().astype(int).tolist()
+            cv2.rectangle(  # type: ignore
+                img, (xyxy[0], xyxy[1]), (xyxy[2], xyxy[3]), (0, 0, 255), 2
             )
-            cv2.rectangle( # type: ignore
-                img,
-                (xyxy[0], xyxy[1]),
-                (xyxy[2], xyxy[3]),
-                (0, 0, 255),
-                2
-            )
-            cv2.putText( # type: ignore
+            cv2.putText(  # type: ignore
                 img,
                 str(int(lab)),
                 (xyxy[0], xyxy[1] - 5),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (0, 0, 255),
-                2
+                2,
             )
 
         visualized[image_id] = img
 
     return visualized
-

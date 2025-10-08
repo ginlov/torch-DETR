@@ -1,19 +1,21 @@
-import sys
 import os
+import sys
+
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
 print(parent)
 sys.path.append(parent)
 
 import torch
+
 from src.detr.layers import (
-    get_positional_encoding,
-    get_backbone,
-    get_multihead_attention,
-    PositionalEncodingSine,
     EncoderLayer,
     Transformer,
+    get_backbone,
+    get_multihead_attention,
+    get_positional_encoding,
 )
+
 
 def test_positional_encoding_shape_and_type():
     """
@@ -30,13 +32,14 @@ def test_positional_encoding_shape_and_type():
     assert not torch.isnan(out).any()
     assert not torch.isinf(out).any()
 
+
 def test_backbone_output_shape():
     """
     Test the output shape of the backbone model.
     """
     # Assuming get_backbone returns a callable backbone model
     # that outputs a tensor of shape (batch_size, channels, height, width)
-    backbone = get_backbone('resnet50')
+    backbone = get_backbone("resnet50")
     x = torch.randn(2, 3, 224, 224)
     out = backbone(x)
     assert isinstance(out, torch.Tensor)
@@ -44,6 +47,7 @@ def test_backbone_output_shape():
     assert out.shape[1] in [2048]  # channels, depending on dilation
     assert not torch.isnan(out).any()
     assert not torch.isinf(out).any()
+
 
 def test_multihead_attention_forward():
     """
@@ -57,6 +61,7 @@ def test_multihead_attention_forward():
     assert out.shape == (2, 10, d_model)
     assert not torch.isnan(out).any()
     assert not torch.isinf(out).any()
+
 
 def test_encoder_layer_forward():
     """
@@ -72,6 +77,7 @@ def test_encoder_layer_forward():
     assert not torch.isnan(out).any()
     assert not torch.isinf(out).any()
 
+
 def test_transformer_forward():
     """
     Test the forward pass of the transformer module.
@@ -81,12 +87,17 @@ def test_transformer_forward():
     num_encoder_layers = 2
     num_decoder_layers = 2
     dim_feedforward = 256
-    transformer = Transformer(d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward)
+    transformer = Transformer(
+        d_model, nhead, num_encoder_layers, num_decoder_layers, dim_feedforward
+    )
     src = torch.randn(2, 10, d_model)
     pos_encoding = torch.zeros(1, 10, d_model)
     query_embedding = torch.zeros(2, 10, d_model)
     out = transformer(src, pos_encoding, query_embedding)
-    assert isinstance(out, torch.Tensor) or (isinstance(out, tuple) and all(isinstance(t, torch.Tensor) for t in out))
+    assert isinstance(out, torch.Tensor) or (
+        isinstance(out, tuple) and all(isinstance(t, torch.Tensor) for t in out)
+    )
+
 
 def test_transformer_can_overfit_toy_data():
     torch.manual_seed(42)
@@ -114,7 +125,7 @@ def test_transformer_can_overfit_toy_data():
         num_encoder_layers=num_encoder_layers,
         num_decoder_layers=num_decoder_layers,
         dim_feedforward=64,
-        dropout=0.1
+        dropout=0.1,
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-3)
@@ -132,4 +143,6 @@ def test_transformer_can_overfit_toy_data():
 
     print("Initial loss:", losses[0])
     print("Final loss:", losses[-1])
-    assert losses[-1] < 0.1, "Transformer did not overfit the toy data (final loss too high)"
+    assert (
+        losses[-1] < 0.1
+    ), "Transformer did not overfit the toy data (final loss too high)"

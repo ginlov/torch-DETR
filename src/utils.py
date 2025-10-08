@@ -1,22 +1,29 @@
-import torch
-from typing import Dict
 from types import SimpleNamespace
+from typing import Dict
 
-#TODO: Implement nested tensor
+import torch
+
+# TODO: Implement nested tensor
 
 CONSTANTS = SimpleNamespace(
-    NO_OBJECT_LABEL=0,
-    IMAGE_EXTENSIONS=('.jpg', '.jpeg', '.png')
+    NO_OBJECT_LABEL=0, IMAGE_EXTENSIONS=(".jpg", ".jpeg", ".png")
 )
+
 
 def init_weights(module):
     """
     Initialize the weights of the model.
-    
+
     Args:
         module (torch.nn.Module): The module to initialize.
     """
-    xavier_uniform_ = [torch.nn.Conv2d, torch.nn.Linear, torch.nn.ConvTranspose2d, torch.nn.Conv1d, torch.nn.ConvTranspose1d]
+    xavier_uniform_ = [
+        torch.nn.Conv2d,
+        torch.nn.Linear,
+        torch.nn.ConvTranspose2d,
+        torch.nn.Conv1d,
+        torch.nn.ConvTranspose1d,
+    ]
     if any(isinstance(module, m) for m in xavier_uniform_):
         torch.nn.init.xavier_uniform_(module.weight)
         if module.bias is not None:
@@ -26,6 +33,7 @@ def init_weights(module):
         torch.nn.init.constant_(module.weight, 1.0)
     elif isinstance(module, torch.nn.Embedding):
         torch.nn.init.normal_(module.weight, mean=0, std=0.01)
+
 
 @torch.no_grad
 def cal_param_norm(model: torch.nn.Module) -> Dict:
@@ -44,6 +52,7 @@ def cal_param_norm(model: torch.nn.Module) -> Dict:
             param_norm[f"param_norm/{name}"] = norm
 
     return param_norm
+
 
 @torch.no_grad
 def cal_grad_norm(model: torch.nn.Module) -> Dict:

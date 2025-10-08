@@ -1,13 +1,15 @@
-import sys
 import os
-import torch
+import sys
+
 import numpy as np
+import torch
 
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
 sys.path.append(parent)
 
 from src.losses.loss import HungarianMatcher
+
 
 def test_hungarian_matcher_shapes():
     matcher = HungarianMatcher()

@@ -1,7 +1,7 @@
 services:
   cvrunner:
     shm_size: "16gb"
-    build: 
+    build:
       context: ..
       dockerfile: environments/Dockerfile
     image: cvrunner-local:latest

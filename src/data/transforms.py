@@ -2,25 +2,25 @@
 # This differs from torchvision.transforms as it also handles bounding box transformations.
 # Each transform class implements a __call__ method that takes in an image and an optional target
 # Bounding boxes in every transform functions are expected to be in [x1, y1, x2, y2] format.
-from abc import ABC, abstractmethod
-from typing import Dict, Tuple, Any, Union
-
 import random
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Tuple, Union
+
 import PIL
 import torch
-
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
+
 
 def box_to_xy(bbox):
     """
     Convert bounding boxes from [x_top_left, y_top_left, w, h] format to [x1, y1, x2, y2] format.
-    
+
     Args:
-        bbox (torch.Tensor): Bounding boxes in [x_top_left, y_top_left, w, h] format. Shape: [bz, N, 4]
-        
+        bbox (torch.Tensor): Bounding boxes in [x_top_left, y_top_left, w, h] format. [bz, N, 4]
+
     Returns:
-        torch.Tensor: Bounding boxes in [x1, y1, x2, y2] format. Shape: [bz, N, 4]
+        torch.Tensor: Bounding boxes in [x1, y1, x2, y2] format. [bz, N, 4]
     """
     # Handle both [bz, N, 4] and [N, 4] shapes
     squeeze = False
@@ -28,21 +28,22 @@ def box_to_xy(bbox):
         bbox = bbox.unsqueeze(0)
         squeeze = True
     bbox_xy = torch.zeros_like(bbox)
-    bbox_xy[..., 0] = bbox[..., 0] # x1
-    bbox_xy[..., 1] = bbox[..., 1] # y1
-    bbox_xy[..., 2] = bbox[..., 0] + bbox[..., 2] # x2
-    bbox_xy[..., 3] = bbox[..., 1] + bbox[..., 3] # y2
+    bbox_xy[..., 0] = bbox[..., 0]  # x1
+    bbox_xy[..., 1] = bbox[..., 1]  # y1
+    bbox_xy[..., 2] = bbox[..., 0] + bbox[..., 2]  # x2
+    bbox_xy[..., 3] = bbox[..., 1] + bbox[..., 3]  # y2
     if squeeze:
         bbox_xy = bbox_xy.squeeze(0)
     return bbox_xy
 
+
 def xy_to_box(bbox_xy):
     """
     Convert bounding boxes from [x1, y1, x2, y2] format to [x_top_left, y_top_left, w, h] format.
-    
+
     Args:
         bbox_xy (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [bz, N, 4]
-        
+
     Returns:
         torch.Tensor: Bounding boxes in [x_top_left, y_top_left, w, h] format. Shape: [bz, N, 4]
     """
@@ -52,13 +53,14 @@ def xy_to_box(bbox_xy):
         bbox_xy = bbox_xy.unsqueeze(0)
         squeeze = True
     bbox = torch.zeros_like(bbox_xy)
-    bbox[..., 0] = bbox_xy[..., 0] # x_top_left
-    bbox[..., 1] = bbox_xy[..., 1] # y_top_left
-    bbox[..., 2] = bbox_xy[..., 2] - bbox_xy[..., 0]        # w
-    bbox[..., 3] = bbox_xy[..., 3] - bbox_xy[..., 1]        # h
+    bbox[..., 0] = bbox_xy[..., 0]  # x_top_left
+    bbox[..., 1] = bbox_xy[..., 1]  # y_top_left
+    bbox[..., 2] = bbox_xy[..., 2] - bbox_xy[..., 0]  # w
+    bbox[..., 3] = bbox_xy[..., 3] - bbox_xy[..., 1]  # h
     if squeeze:
         bbox = bbox.squeeze(0)
     return bbox
+
 
 def crop(img, target, region):
     """
@@ -66,12 +68,12 @@ def crop(img, target, region):
     Bounding boxes in the target dictionary need to be
     in the format [x1, y1, x2, y2].
 
-    
+
     Args:
         img (PIL.Image): The input image to be cropped.
         target (dict, optional): The target dictionary containing annotations.
         region (tuple): The crop rectangle, as a (left, upper, right, lower)-tuple.
-        
+
     Returns:
         img (PIL.Image): The cropped image.
         target (dict, optional): The adjusted target dictionary.
@@ -82,7 +84,9 @@ def crop(img, target, region):
 
     boxes = target["boxes"]
     # Adjust boxes
-    boxes = boxes - torch.tensor([region[0], region[1], region[0], region[1]], dtype=torch.float32)
+    boxes = boxes - torch.tensor(
+        [region[0], region[1], region[0], region[1]], dtype=torch.float32
+    )
     # Clip boxes to be within the image
     boxes[:, 0::2] = boxes[:, 0::2].clamp(min=0, max=region[2] - region[0])
     boxes[:, 1::2] = boxes[:, 1::2].clamp(min=0, max=region[3] - region[1])
@@ -94,18 +98,19 @@ def crop(img, target, region):
 
     return img, target
 
+
 def resize(img, target, size, max_size=None):
     """
     Resize the input PIL Image to the given size.
     Bounding boxes in the target dictionary need to be
     in the format [x1, y1, x2, y2].
-    
+
     Args:
         img (PIL.Image): The input image to be resized.
         target (dict, optional): The target dictionary containing annotations.
         size (int): The desired size of the smaller edge after resizing.
         max_size (int, optional): Maximum size of the longer side after resizing.
-        
+
     Returns:
         img (PIL.Image): The resized image.
         target (dict, optional): The adjusted target dictionary.
@@ -136,16 +141,17 @@ def resize(img, target, size, max_size=None):
     target["boxes"] = boxes
     return img, target
 
+
 def hflip(img, target):
     """
     Horizontally flip the given PIL Image.
     Bounding boxes in the target dictionary need to be
     in the format [x1, y1, x2, y2].
-    
+
     Args:
         img (PIL.Image): The input image to be flipped.
         target (dict, optional): The target dictionary containing annotations.
-        
+
     Returns:
         img (PIL.Image): The flipped image.
         target (dict, optional): The adjusted target dictionary.
@@ -161,15 +167,16 @@ def hflip(img, target):
     target["boxes"] = boxes
     return img, target
 
+
 def box_iou_matrix(box1: torch.Tensor, box2: torch.Tensor):
     """
     Compute the IoU of two sets of boxes.
     Boxes are expected in [x1, y1, x2, y2] format.
-    
+
     Args:
         box1 (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [N, 4]
         box2 (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [M, 4]
-        
+
     Returns:
         torch.Tensor: IoU matrix of shape [N, M]
     """
@@ -187,15 +194,16 @@ def box_iou_matrix(box1: torch.Tensor, box2: torch.Tensor):
     iou = inter / union
     return iou
 
+
 def box_iou(box1: torch.Tensor, box2: torch.Tensor):
     """
     Compute the IoU of two sets of boxes.
     Boxes are expected in [x1, y1, x2, y2] format.
-    
+
     Args:
         box1 (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [N, 4]
         box2 (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [N, 4]
-        
+
     Returns:
         torch.Tensor: IoU for each pair of boxes. Shape: [N]
     """
@@ -214,8 +222,8 @@ def box_iou(box1: torch.Tensor, box2: torch.Tensor):
     iou = inter / union
     return iou
 
+
 class BaseTransform(ABC):
-    @abstractmethod
     def __init__(self):
         pass
 
@@ -224,22 +232,25 @@ class BaseTransform(ABC):
         """
         Args:
             img (torch.Tensor): The input image tensor.
-            target (dict, optional): The target dictionary containing annotations. Typical format is:
+            target (dict, optional): The target dictionary containing annotations.
+            Typical format is:
                 {
                     "boxes": torch.Tensor of shape [N, 4] in [cx, cy, w, h] format,
                     "labels": torch.Tensor of shape [N] with class labels,
                     ...
                 }
-        
+
         Returns:
             img (torch.Tensor): The image after transformation.
             target (dict, optional): The target dictionary which was changed accordingly.
         """
 
+
 class ToTensor(BaseTransform):
     """
     Convert a PIL image to a PyTorch tensor and scale pixel values to [0, 1].
     """
+
     def __init__(self):
         super().__init__()
 
@@ -256,10 +267,12 @@ class ToTensor(BaseTransform):
         img = F.to_tensor(img)
         return img, target
 
+
 class Compose(BaseTransform):
     """
     Composes several transforms together.
     """
+
     def __init__(self, transforms):
         """
         Args:
@@ -282,11 +295,13 @@ class Compose(BaseTransform):
             img, target = t(img, target)
         return img, target
 
+
 class RandomSizeCrop(BaseTransform):
     """
     Crop the given PIL Image to a random size and aspect ratio.
     A crop of random size (min_size, max_size) is made.
     """
+
     def __init__(self, min_size, max_size):
         """
         Args:
@@ -312,10 +327,12 @@ class RandomSizeCrop(BaseTransform):
         region = T.RandomCrop.get_params(img, [h, w])
         return crop(img, target, region)
 
+
 class RandomSelect(BaseTransform):
     """
     Randomly select one of the given transforms to apply.
     """
+
     def __init__(self, *transforms):
         """
         Args:
@@ -337,10 +354,12 @@ class RandomSelect(BaseTransform):
         transform = random.choice(self.transforms)
         return transform(img, target)
 
+
 class RandomResize(BaseTransform):
     """
     Resize the input PIL Image to a random size from the given list of sizes.
     """
+
     def __init__(self, sizes, max_size=None) -> None:
         """
         Args:
@@ -353,10 +372,10 @@ class RandomResize(BaseTransform):
         self.max_size = max_size
 
     def __call__(
-            self,
-            img,
-            target
-    ) -> Tuple[Union[PIL.Image.Image, torch.Tensor], Dict[str, Union[torch.Tensor, Any]]]:
+        self, img, target
+    ) -> Tuple[
+        Union[PIL.Image.Image, torch.Tensor], Dict[str, Union[torch.Tensor, Any]]
+    ]:
         """
         Resize the image to a random size from the list of sizes.
         Bounding boxes in the target dictionary need to be
@@ -370,10 +389,12 @@ class RandomResize(BaseTransform):
         size = random.choice(self.sizes)
         return resize(img, target, size, self.max_size)
 
+
 class RandomHorizontalFlip(BaseTransform):
     """
     Horizontally flip the given PIL Image randomly with a given probability.
     """
+
     def __init__(self, prob=0.5):
         """
         Args:
@@ -396,10 +417,12 @@ class RandomHorizontalFlip(BaseTransform):
             return hflip(img, target)
         return img, target
 
+
 class RandomCrop(BaseTransform):
     """
     Crop the given PIL Image to a random location with the given size.
     """
+
     def __init__(self, size):
         """
         Args:
@@ -421,10 +444,12 @@ class RandomCrop(BaseTransform):
         region = T.RandomCrop.get_params(img, self.size)
         return crop(img, target, region)
 
+
 class Normalize(BaseTransform):
-    """ 
+    """
     Normalize a tensor image with mean and standard deviation.
     """
+
     def __init__(self, mean, std):
         """
         Args:
@@ -456,10 +481,12 @@ class Normalize(BaseTransform):
             target["boxes"] = boxes
         return img, target
 
+
 class UnNormalize(BaseTransform):
-    """ 
+    """
     Unnormalize a tensor image with mean and standard deviation.
     """
+
     def __init__(self, mean, std):
         """
         Args:
@@ -496,4 +523,3 @@ class UnNormalize(BaseTransform):
             boxes = boxes * torch.tensor([w, h, w, h], dtype=torch.float32)
             target["boxes"] = boxes
         return img, target
-
