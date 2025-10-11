@@ -195,7 +195,7 @@ def box_iou_matrix(box1: torch.Tensor, box2: torch.Tensor):
     return iou
 
 
-def box_iou(box1: torch.Tensor, box2: torch.Tensor):
+def box_iou(box1: torch.Tensor, box2: torch.Tensor) -> torch.Tensor:
     """
     Compute the IoU of two sets of boxes.
     Boxes are expected in [x1, y1, x2, y2] format.

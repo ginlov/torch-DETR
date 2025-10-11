@@ -39,7 +39,11 @@ def l_hung(
     return loss_label + loss_bbox
 
 
-def l_box(bbox, bbox_preds, mask):
+def l_box(
+    bbox: torch.Tensor,
+    bbox_preds: torch.Tensor,
+    mask: torch.Tensor
+) -> torch.Tensor:
     """
     Compute the bounding box loss.
     BBoxes must be in normalized [x1, y1, x2, y2] format.
@@ -57,7 +61,11 @@ def l_box(bbox, bbox_preds, mask):
     return l1_loss + liou_loss
 
 
-def iou_loss(bbox, bbox_preds, mask):
+def iou_loss(
+    bbox: torch.Tensor,
+    bbox_preds: torch.Tensor,
+    mask: torch.Tensor
+) -> torch.Tensor:
     """
     Compute the IoU loss between ground truth and predicted bounding boxes.
     BBoxes must be in normalized [x1, y1, x2, y2] format.
@@ -81,7 +89,11 @@ def iou_loss(bbox, bbox_preds, mask):
     return loss.mean()
 
 
-def L1_loss(bbox, bbox_preds, mask):
+def L1_loss(
+    bbox: torch.Tensor,
+    bbox_preds: torch.Tensor,
+    mask: torch.Tensor
+) -> torch.Tensor:
     """
     Compute the L1 loss between ground truth and predicted bounding boxes.
     BBoxes must be in normalized [x1, y1, x2, y2] format.

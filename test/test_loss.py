@@ -1,3 +1,5 @@
+# All bbox coordinates are in (x1, y1, x2, y2) format, normalized to [0, 1]
+
 import os
 import sys
 
@@ -15,13 +17,17 @@ from src.losses.loss import DETRLoss, L1_loss, iou_loss, l_box, l_hung
 
 
 def test_l_hung_perfect_match():
+    """
+    Test that l_hung loss is near zero when predictions match the labels perfectly.
+    """
     # 2 objects, perfect prediction
     labs = torch.tensor([[1, 2]])
     lab_preds = torch.tensor(
         [[[0.0, 10.0, 0.0], [0.0, 0.0, 10.0]]], dtype=torch.float32
     )
-    bbox = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.1, 0.1, 0.1, 0.1]]])
-    bbox_preds = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.1, 0.1, 0.1, 0.1]]])
+    ## Bbox and bbox_preds are in (x1, y1, x2, y2) format, normalized to [0, 1]
+    bbox = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
+    bbox_preds = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
     loss = l_hung(
         labs, lab_preds, bbox, bbox_preds, torch.ones_like(labs, dtype=torch.bool)
     )
@@ -33,13 +39,16 @@ def test_l_hung_perfect_match():
 
 
 def test_l_hung_imperfect_match():
+    """
+    Test that l_hung loss is positive when predictions do not match the labels perfectly.
+    """
     # 2 objects, one prediction is off
     labs = torch.tensor([[1, 2]])
     lab_preds = torch.tensor(
         [[[0.0, 10.0, 0.0], [0.0, 0.0, 10.0]]], dtype=torch.float32
     )
-    bbox = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.1, 0.1, 0.1, 0.1]]])
-    bbox_preds = torch.tensor([[[0.6, 0.5, 0.2, 0.2], [0.2, 0.2, 0.1, 0.1]]])
+    bbox = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
+    bbox_preds = torch.tensor([[[0.2, 0.2, 0.6, 0.5], [0.1, 0.1, 0.3, 0.3]]])
     loss = l_hung(
         labs, lab_preds, bbox, bbox_preds, torch.ones_like(labs, dtype=torch.bool)
     )
@@ -47,8 +56,11 @@ def test_l_hung_imperfect_match():
 
 
 def test_l1_loss_basic():
-    bbox = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.1, 0.1, 0.1, 0.1]]])
-    bbox_preds = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.2, 0.2, 0.1, 0.1]]])
+    """
+    Test that L1 loss is near zero when predictions match the labels perfectly.
+    """
+    bbox = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
+    bbox_preds = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
     mask = torch.tensor([[1, 0]], dtype=torch.bool)
     loss = L1_loss(bbox, bbox_preds, mask)
     assert loss >= 0, f"L1 loss should be positive all time, got {loss.item()}"
@@ -57,9 +69,13 @@ def test_l1_loss_basic():
     ), "L1 loss should be zero for perfect match"
 
 
+
 def test_liou_loss_basic():
-    bbox = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.1, 0.1, 0.1, 0.1]]])
-    bbox_preds = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.2, 0.2, 0.1, 0.1]]])
+    """
+    Test that IoU loss is near zero when predictions match the labels perfectly.
+    """
+    bbox = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
+    bbox_preds = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
     mask = torch.tensor([[1, 0]], dtype=torch.bool)
     print(bbox.shape)
     print(bbox_preds.shape)
@@ -73,14 +89,20 @@ def test_liou_loss_basic():
 
 
 def test_l_box_combined_loss():
-    bbox = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.1, 0.1, 0.1, 0.1]]])
-    bbox_preds = torch.tensor([[[0.6, 0.5, 0.2, 0.2], [0.2, 0.2, 0.1, 0.1]]])
+    """
+    Test that combined loss is near zero when predictions do not match the labels perfectly.
+    """
+    bbox = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
+    bbox_preds = torch.tensor([[[0.2, 0.2, 0.6, 0.5], [0.1, 0.1, 0.3, 0.3]]])
     mask = torch.tensor([[1, 1]], dtype=torch.bool)
     loss = l_box(bbox, bbox_preds, mask)
     assert loss >= 0, "Combined loss should be positive for imperfect match"
 
 
 def test_l1_loss_empty_mask():
+    """
+    Test that L1 loss is zero when mask is empty.
+    """
     bbox = torch.randn(1, 2, 4)
     bbox_preds = torch.randn(1, 2, 4)
     mask = torch.tensor([[0, 0]], dtype=torch.bool)
@@ -89,6 +111,9 @@ def test_l1_loss_empty_mask():
 
 
 def test_liou_loss_empty_mask():
+    """
+    Test that IoU loss is zero when mask is empty.
+    """
     bbox = torch.randn(1, 2, 4)
     bbox_preds = torch.randn(1, 2, 4)
     mask = torch.tensor([[0, 0]], dtype=torch.bool)
@@ -97,14 +122,17 @@ def test_liou_loss_empty_mask():
 
 
 def test_detr_loss_perfect_match():
+    """
+    Test that DETR loss is near zero when predictions match the labels perfectly.
+    """
     detr_loss = DETRLoss()
     labs = torch.tensor([[1, 2]])
     lab_preds = torch.tensor(
         [[[0.0, 10.0, 0.0], [0.0, 0.0, 10.0]]], dtype=torch.float32
     )
-    bbox = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.1, 0.1, 0.1, 0.1]]])
-    bbox_preds = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.1, 0.1, 0.1, 0.1]]])
-    loss = detr_loss(labs, lab_preds, bbox, bbox_preds)
+    bbox = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
+    bbox_preds = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
+    loss, _ = detr_loss(labs, lab_preds, bbox, bbox_preds)
     assert loss >= 0, f"DETR loss should be positive all time, got {loss.item()}"
     assert (
         loss < 1e-4
@@ -112,14 +140,17 @@ def test_detr_loss_perfect_match():
 
 
 def test_detr_loss_imperfect_match():
+    """
+    Test that DETR loss is positive when predictions do not match the labels perfectly.
+    """
     detr_loss = DETRLoss()
     labs = torch.tensor([[1, 2]])
     lab_preds = torch.tensor(
         [[[0.0, 10.0, 0.0], [0.0, 0.0, 10.0]]], dtype=torch.float32
     )
-    bbox = torch.tensor([[[0.5, 0.5, 0.2, 0.2], [0.1, 0.1, 0.1, 0.1]]])
-    bbox_preds = torch.tensor([[[0.6, 0.5, 0.2, 0.2], [0.2, 0.2, 0.1, 0.1]]])
-    loss = detr_loss(labs, lab_preds, bbox, bbox_preds)
+    bbox = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
+    bbox_preds = torch.tensor([[[0.2, 0.2, 0.6, 0.5], [0.1, 0.1, 0.3, 0.3]]])
+    loss, _ = detr_loss(labs, lab_preds, bbox, bbox_preds)
     assert loss >= 0, "DETR loss should be positive for imperfect match"
 
 
@@ -169,7 +200,7 @@ def test_detr_can_improve_on_detr_loss():
     for step in range(300):
         optimizer.zero_grad()
         class_preds, bbox_preds = model(dummy_input)
-        loss = loss_fn(target_labels, class_preds, target_boxes, bbox_preds)
+        loss, _ = loss_fn(target_labels, class_preds, target_boxes, bbox_preds)
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
