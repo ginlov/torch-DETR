@@ -50,7 +50,7 @@ class CPPE5Dataset(DETRDataset):
         sanity_check: bool = False,
     ):
         """
-        Original bboxes are in [x_top_left, y_top_left, w, h] format, need to apply box_to_xy to
+        Original bboxes are in [x_top_left, y_top_left, w, h] format (not normalized), need to apply box_to_xy to
         convert to [x1, y1, x2, y2] format.
         """
         super().__init__()

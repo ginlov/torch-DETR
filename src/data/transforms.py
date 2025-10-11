@@ -3,6 +3,7 @@
 # Each transform class implements a __call__ method that takes in an image and an optional target
 # Bounding boxes in every transform functions are expected to be in [x1, y1, x2, y2] format.
 import random
+import copy
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Tuple, Union
 
@@ -12,9 +13,10 @@ from torchvision import transforms as T
 from torchvision.transforms import functional as F
 
 
-def box_to_xy(bbox):
+def box_to_xy(bbox: torch.Tensor) -> torch.Tensor:
     """
     Convert bounding boxes from [x_top_left, y_top_left, w, h] format to [x1, y1, x2, y2] format.
+    This function works with both normalized [0, 1] and absolute pixel values.
 
     Args:
         bbox (torch.Tensor): Bounding boxes in [x_top_left, y_top_left, w, h] format. [bz, N, 4]
@@ -37,9 +39,10 @@ def box_to_xy(bbox):
     return bbox_xy
 
 
-def xy_to_box(bbox_xy):
+def xy_to_box(bbox_xy: torch.Tensor) -> torch.Tensor:
     """
     Convert bounding boxes from [x1, y1, x2, y2] format to [x_top_left, y_top_left, w, h] format.
+    This function works with both normalized [0, 1] and absolute pixel values.
 
     Args:
         bbox_xy (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [bz, N, 4]
@@ -67,7 +70,8 @@ def crop(img, target, region):
     Crop the given PIL Image to the specified region.
     Bounding boxes in the target dictionary need to be
     in the format [x1, y1, x2, y2].
-
+    Boxes are expected to be in absolute pixel values (not normalized).
+    region is a tuple (top, left, hight, width).
 
     Args:
         img (PIL.Image): The input image to be cropped.
@@ -78,32 +82,36 @@ def crop(img, target, region):
         img (PIL.Image): The cropped image.
         target (dict, optional): The adjusted target dictionary.
     """
-    img = F.crop(img, *region)
+    returned_img = F.crop(img, *region)
     if target is None or "boxes" not in target:
-        return img, target
+        return returned_img, target
 
-    boxes = target["boxes"]
+    returned_target = copy.deepcopy(target)
     # Adjust boxes
-    boxes = boxes - torch.tensor(
-        [region[0], region[1], region[0], region[1]], dtype=torch.float32
+    returned_target["boxes"] = target["boxes"] - torch.tensor(
+        [region[1], region[0], region[1], region[0]], dtype=torch.float32
     )
     # Clip boxes to be within the image
-    boxes[:, 0::2] = boxes[:, 0::2].clamp(min=0, max=region[2] - region[0])
-    boxes[:, 1::2] = boxes[:, 1::2].clamp(min=0, max=region[3] - region[1])
-    # Remove boxes that are completely outside the crop
-    keep = (boxes[:, 2] > boxes[:, 0]) & (boxes[:, 3] > boxes[:, 1])
-    target["boxes"] = boxes[keep]
-    if "labels" in target:
-        target["labels"] = target["labels"][keep]
+    returned_target["boxes"][:, 0::2] = returned_target["boxes"][:, 0::2]\
+    .clamp(min=0, max=region[3])
+    returned_target["boxes"][:, 1::2] = returned_target["boxes"][:, 1::2]\
+    .clamp(min=0, max=region[2])
 
-    return img, target
+    # Remove boxes that are completely outside the crop
+    keep = (returned_target["boxes"][:, 2] > returned_target["boxes"][:, 0]) \
+        & (returned_target["boxes"][:, 3] > returned_target["boxes"][:, 1])
+    returned_target["boxes"] = returned_target["boxes"][keep]
+    if "labels" in returned_target:
+        returned_target["labels"] = returned_target["labels"][keep]
+
+    return returned_img, returned_target
 
 
 def resize(img, target, size, max_size=None):
     """
     Resize the input PIL Image to the given size.
     Bounding boxes in the target dictionary need to be
-    in the format [x1, y1, x2, y2].
+    in the format [x1, y1, x2, y2]. Boxes are expected to be in absolute pixel values (not normalized).
 
     Args:
         img (PIL.Image): The input image to be resized.
@@ -131,22 +139,21 @@ def resize(img, target, size, max_size=None):
     else:
         oh = size
         ow = int(size * w / h)
-    img = F.resize(img, [oh, ow])
+    returned_img = F.resize(img, [oh, ow])
 
     if target is None or "boxes" not in target:
-        return img, target
+        return returned_img, target
 
-    boxes = target["boxes"]
-    boxes = boxes * torch.tensor([ow / w, oh / h, ow / w, oh / h], dtype=torch.float32)
-    target["boxes"] = boxes
-    return img, target
+    returned_target = copy.deepcopy(target)
+    returned_target["boxes"] = target["boxes"] * torch.tensor([ow / w, oh / h, ow / w, oh / h], dtype=torch.float32)
+    return returned_img, returned_target
 
 
 def hflip(img, target):
     """
     Horizontally flip the given PIL Image.
     Bounding boxes in the target dictionary need to be
-    in the format [x1, y1, x2, y2].
+    in the format [x1, y1, x2, y2]. Boxes are expected to be in absolute pixel values (not normalized).
 
     Args:
         img (PIL.Image): The input image to be flipped.
@@ -156,22 +163,22 @@ def hflip(img, target):
         img (PIL.Image): The flipped image.
         target (dict, optional): The adjusted target dictionary.
     """
-    img = F.hflip(img)
+    returned_img = F.hflip(img)
     if target is None or "boxes" not in target:
-        return img, target
+        return returned_img, target
 
-    w, h = img.size
-    boxes = target["boxes"].clone()
-    boxes[:, 0] = w - target["boxes"][:, 2]  # x1' = w - x2
-    boxes[:, 2] = w - target["boxes"][:, 0]  # x2' = w - x1
-    target["boxes"] = boxes
-    return img, target
+    w, _ = img.size
+    returned_target = copy.deepcopy(target)
+    returned_target["boxes"][:, 0] = w - target["boxes"][:, 2]  # x1' = w - x2
+    returned_target["boxes"][:, 2] = w - target["boxes"][:, 0]  # x2' = w - x1
+    return returned_img, returned_target
 
 
 def box_iou_matrix(box1: torch.Tensor, box2: torch.Tensor):
     """
     Compute the IoU of two sets of boxes.
     Boxes are expected in [x1, y1, x2, y2] format.
+    This function works with both normalized [0, 1] and absolute pixel values.
 
     Args:
         box1 (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [N, 4]
@@ -199,6 +206,7 @@ def box_iou(box1: torch.Tensor, box2: torch.Tensor) -> torch.Tensor:
     """
     Compute the IoU of two sets of boxes.
     Boxes are expected in [x1, y1, x2, y2] format.
+    This function works with both normalized [0, 1] and absolute pixel values.
 
     Args:
         box1 (torch.Tensor): Bounding boxes in [x1, y1, x2, y2] format. Shape: [N, 4]
@@ -316,12 +324,16 @@ class RandomSizeCrop(BaseTransform):
         """
         Randomly crop the image to a size between min_size and max_size.
         Bounding boxes in the target dictionary need to be
-        in the format [x1, y1, x2, y2].
+        in the format [x1, y1, x2, y2]. Boxes are expected to be in absolute pixel values (not normalized).
 
         Args:
             img (PIL.Image): The input image to be cropped.
             target (dict, optional): The target dictionary containing annotations.
         """
+        max_w = min(img.width, self.max_size)
+        max_h = min(img.height, self.max_size)
+        if max_w < self.min_size or max_h < self.min_size:
+            return img, target
         w = random.randint(self.min_size, min(img.width, self.max_size))
         h = random.randint(self.min_size, min(img.height, self.max_size))
         region = T.RandomCrop.get_params(img, [h, w])
@@ -379,7 +391,7 @@ class RandomResize(BaseTransform):
         """
         Resize the image to a random size from the list of sizes.
         Bounding boxes in the target dictionary need to be
-        in the format [x1, y1, x2, y2].
+        in the format [x1, y1, x2, y2]. Boes are expected to be in absolute pixel values (not normalized).
 
         Args:
             img (PIL.Image): The input image to be resized.
@@ -407,7 +419,7 @@ class RandomHorizontalFlip(BaseTransform):
         """
         Horizontally flip the image with the given probability.
         Bounding boxes in the target dictionary need to be
-        in the format [x1, y1, x2, y2].
+        in the format [x1, y1, x2, y2]. Boxes are expected to be in absolute pixel values (not normalized).
 
         Args:
             img (PIL.Image): The input image to be flipped.
@@ -435,7 +447,7 @@ class RandomCrop(BaseTransform):
         """
         Crop the image to a random location with the given size.
         Bounding boxes in the target dictionary need to be
-        in the format [x1, y1, x2, y2].
+        in the format [x1, y1, x2, y2]. Boxes are expected to be in absolute pixel values (not normalized).
 
         Args:
             img (PIL.Image): The input image to be cropped.
@@ -464,22 +476,23 @@ class Normalize(BaseTransform):
         """
         Normalize the image with the given mean and std.
         Bounding boxes in the target dictionary need to be
-        in the format [x1, y1, x2, y2].
+        in the format [x1, y1, x2, y2]. Boxes are expected to be in absolute pixel values (not normalized).
 
         Args:
             img (torch.Tensor): The input image tensor to be normalized.
             target (dict, optional): The target dictionary containing annotations.
         """
-        img = F.normalize(img, mean=self.mean, std=self.std)
+        new_img = copy.deepcopy(img)
+        new_img = F.normalize(new_img, mean=self.mean, std=self.std)
         if target is None:
-            return img, None
-        target = target.copy()
+            return new_img, target
+        new_target = copy.deepcopy(target)
         h, w = img.shape[-2:]
-        if "boxes" in target:
-            boxes = target["boxes"]
+        if "boxes" in new_target:
+            boxes = new_target["boxes"]
             boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
-            target["boxes"] = boxes
-        return img, target
+            new_target["boxes"] = boxes
+        return new_img, new_target
 
 
 class UnNormalize(BaseTransform):
@@ -501,7 +514,7 @@ class UnNormalize(BaseTransform):
         """
         Unnormalize the image with the given mean and std.
         Bounding boxes in the target dictionary need to be
-        in the format [x1, y1, x2, y2].
+        in the format [x1, y1, x2, y2]. Boxes are expected to be normalized to [0, 1].
 
         Args:
             img (torch.Tensor): The input image tensor to be unnormalized.
@@ -511,15 +524,15 @@ class UnNormalize(BaseTransform):
             img (torch.Tensor): The unnormalized image tensor.
             target (dict, optional): The target dictionary which was changed accordingly.
         """
-        img = img.clone()
-        for t, m, s in zip(img, self.mean, self.std):
+        new_img = copy.deepcopy(img)
+        for t, m, s in zip(new_img, self.mean, self.std):
             t.mul_(s).add_(m)
         if target is None:
-            return img, None
-        target = target.copy()
+            return new_img, None
+        new_target = copy.deepcopy(target)
         h, w = img.shape[-2:]
-        if "boxes" in target:
-            boxes = target["boxes"]
+        if "boxes" in new_target:
+            boxes = new_target["boxes"]
             boxes = boxes * torch.tensor([w, h, w, h], dtype=torch.float32)
-            target["boxes"] = boxes
-        return img, target
+            new_target["boxes"] = boxes
+        return new_img, new_target

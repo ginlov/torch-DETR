@@ -3,6 +3,7 @@ from typing import Dict, List
 import cv2
 import numpy as np
 import torch
+import copy
 
 from src.data.transforms import UnNormalize
 
@@ -16,6 +17,7 @@ def visualize_output(
     out_bboxes: List[torch.Tensor],
     gt_labs: List[torch.Tensor],
     gt_bboxes: List[torch.Tensor],
+    unormalize: bool = True,
 ) -> Dict[int, np.ndarray]:
     """
     Visualize the output of a model along with ground truth labels and bounding boxes.
@@ -33,6 +35,7 @@ def visualize_output(
         labels for each image. [B, num_gt]
         gt_bboxes (List[torch.Tensor]): List of tensors containing ground truth
         bounding boxes for each image. [B, num_gt, 4]
+        unormalize (bool, optional): Whether to unnormalize the images before
 
     Returns:
         Dict[int, np.ndarray]: A dictionary mapping image IDs to their
@@ -47,25 +50,36 @@ def visualize_output(
     for idx, image_id in enumerate(image_ids):
         img = imgs_np[idx]
 
-        # Concatnate gt_bboxes and out_bboxes for unnormalization
-        if len(gt_bboxes[idx]) > 0 and len(out_bboxes[idx]) > 0:
-            all_bboxes = torch.cat((gt_bboxes[idx], out_bboxes[idx]), dim=0)
-        else:
-            all_bboxes = gt_bboxes[idx] if len(gt_bboxes[idx]) > 0 else out_bboxes[idx]
-        img, all_bboxes = unnormalize(img, {"boxes": all_bboxes})
-        all_bboxes = all_bboxes["boxes"]
+        if unormalize:
+            # Concatnate gt_bboxes and out_bboxes for unnormalization
+            if len(gt_bboxes[idx]) > 0 and len(out_bboxes[idx]) > 0:
+                all_bboxes = torch.cat((gt_bboxes[idx], out_bboxes[idx]), dim=0)
+            else:
+                all_bboxes = gt_bboxes[idx] if len(gt_bboxes[idx]) > 0 else out_bboxes[idx]
 
-        # Split back to gt_bboxes and out_bboxes
-        if len(gt_bboxes[idx]) > 0 and len(out_bboxes[idx]) > 0:
-            gt_bboxes[idx] = all_bboxes[: len(gt_bboxes[idx])]
-            out_bboxes[idx] = all_bboxes[len(gt_bboxes[idx]) :]
-        elif len(gt_bboxes[idx]) > 0:
-            gt_bboxes[idx] = all_bboxes
-        elif len(out_bboxes[idx]) > 0:
-            out_bboxes[idx] = all_bboxes
+            img, all_bboxes = unnormalize(img, {"boxes": all_bboxes})
+            all_bboxes = all_bboxes["boxes"]
+
+            # Split back to gt_bboxes and out_bboxes
+            if len(gt_bboxes[idx]) > 0 and len(out_bboxes[idx]) > 0:
+                gt_visualized = all_bboxes[: len(gt_bboxes[idx])]
+                out_visualized = all_bboxes[len(gt_bboxes[idx]) :]
+            elif len(gt_bboxes[idx]) > 0:
+                gt_visualized = all_bboxes
+                out_visualized = []
+            elif len(out_bboxes[idx]) > 0:
+                out_visualized = all_bboxes
+                gt_visualized = []
+            else:
+                gt_visualized = []
+                out_visualized = []
+        else:
+            gt_visualized = gt_bboxes[idx]
+            out_visualized = out_bboxes[idx]
+            img = copy.deepcopy(img)
 
         img = img.permute(1, 2, 0).numpy()
-        mask = masks_np[idx][0]
+        mask = copy.deepcopy(masks_np[idx][0])
         # If normalized, scale to [0,255]
         if img.max() <= 1.0:
             img = img * 255.0
@@ -74,7 +88,7 @@ def visualize_output(
         img = np.ascontiguousarray(img)
 
         # Draw ground truth boxes (green)
-        for lab, bbox in zip(gt_labs[idx], gt_bboxes[idx]):
+        for lab, bbox in zip(gt_labs[idx], gt_visualized):
             xyxy = bbox.cpu().numpy().astype(int).tolist()
             cv2.rectangle(img, (xyxy[0], xyxy[1]), (xyxy[2], xyxy[3]), (0, 255, 0), 2)
             cv2.putText(
@@ -88,7 +102,7 @@ def visualize_output(
             )
 
         # Draw predicted boxes (red)
-        for lab, bbox in zip(out_labs[idx], out_bboxes[idx]):
+        for lab, bbox in zip(out_labs[idx], out_visualized):
             xyxy = bbox.cpu().numpy().astype(int).tolist()
             cv2.rectangle(  # type: ignore
                 img, (xyxy[0], xyxy[1]), (xyxy[2], xyxy[3]), (0, 0, 255), 2
