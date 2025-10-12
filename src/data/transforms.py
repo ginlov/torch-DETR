@@ -490,7 +490,7 @@ class Normalize(BaseTransform):
         h, w = img.shape[-2:]
         if "boxes" in new_target:
             boxes = new_target["boxes"]
-            boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
+            # boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
             new_target["boxes"] = boxes
         return new_img, new_target
 
@@ -533,6 +533,6 @@ class UnNormalize(BaseTransform):
         h, w = img.shape[-2:]
         if "boxes" in new_target:
             boxes = new_target["boxes"]
-            boxes = boxes * torch.tensor([w, h, w, h], dtype=torch.float32)
+            # boxes = boxes * torch.tensor([w, h, w, h], dtype=torch.float32)
             new_target["boxes"] = boxes
         return new_img, new_target

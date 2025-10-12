@@ -1,6 +1,7 @@
 import json
 import os
 from abc import ABC, abstractmethod
+from typing import Type
 
 import torch
 from PIL import Image
@@ -12,7 +13,11 @@ from src.utils import CONSTANTS
 class DETRDataset(torch.utils.data.Dataset, ABC):
     @abstractmethod
     def __init__(self):
-        pass
+        self.images = []
+        self.boxes = []
+        self.labels = []
+        self.transform = T.ToTensor()
+        self.image_metadata = {}
 
     def __len__(self):
         return len(self.images)
@@ -38,7 +43,7 @@ class SFCHDDataset(DETRDataset):
     def __init__(self, folder_path, partition: str = "train"):
         super().__init__()
         self._folder_path = folder_path
-        pass
+        self.partition = partition
 
 
 class CPPE5Dataset(DETRDataset):
@@ -184,15 +189,16 @@ def collate_fn(batch):
     images = [item[0] for item in batch]  # various sizes
     targets = [item[1] for item in batch]  # various number of boxes for each image
 
+    # Batch images
+    max_w = max([img.shape[2] for img in images])
+    max_h = max([img.shape[1] for img in images])
+
     targets = {
-        "boxes": [t["boxes"] for t in targets],
+        "boxes": [t["boxes"] / torch.tensor([max_w, max_h, max_w, max_h], dtype=torch.float32) for t in targets],
         "labels": [t["labels"] for t in targets],
         "image_id": [t["image_id"] for t in targets],
     }
 
-    # Batch images
-    max_w = max([img.shape[2] for img in images])
-    max_h = max([img.shape[1] for img in images])
     batch_size = len(images)
     batched_imgs = torch.zeros(
         (batch_size, 3, max_h, max_w), dtype=images[0].dtype

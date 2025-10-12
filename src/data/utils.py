@@ -49,21 +49,25 @@ def visualize_output(
 
     for idx, image_id in enumerate(image_ids):
         img = imgs_np[idx]
+        w, h = img.shape[2], img.shape[1]
+
+        gt_visualized = gt_bboxes[idx] * torch.tensor([w, h, w, h], dtype=torch.float32) if len(gt_bboxes[idx]) > 0 else gt_bboxes[idx]
+        out_visualized = out_bboxes[idx] * torch.tensor([w, h, w, h], dtype=torch.float32) if len(out_bboxes[idx]) > 0 else out_bboxes[idx]
 
         if unormalize:
             # Concatnate gt_bboxes and out_bboxes for unnormalization
             if len(gt_bboxes[idx]) > 0 and len(out_bboxes[idx]) > 0:
-                all_bboxes = torch.cat((gt_bboxes[idx], out_bboxes[idx]), dim=0)
+                all_bboxes = torch.cat((gt_visualized, out_visualized), dim=0)
             else:
-                all_bboxes = gt_bboxes[idx] if len(gt_bboxes[idx]) > 0 else out_bboxes[idx]
+                all_bboxes = gt_visualized if len(gt_visualized) > 0 else out_visualized
 
             img, all_bboxes = unnormalize(img, {"boxes": all_bboxes})
             all_bboxes = all_bboxes["boxes"]
 
             # Split back to gt_bboxes and out_bboxes
-            if len(gt_bboxes[idx]) > 0 and len(out_bboxes[idx]) > 0:
-                gt_visualized = all_bboxes[: len(gt_bboxes[idx])]
-                out_visualized = all_bboxes[len(gt_bboxes[idx]) :]
+            if len(gt_visualized) > 0 and len(out_visualized) > 0:
+                gt_visualized = all_bboxes[: len(gt_visualized)]
+                out_visualized = all_bboxes[len(gt_visualized) :]
             elif len(gt_bboxes[idx]) > 0:
                 gt_visualized = all_bboxes
                 out_visualized = []
@@ -74,8 +78,6 @@ def visualize_output(
                 gt_visualized = []
                 out_visualized = []
         else:
-            gt_visualized = gt_bboxes[idx]
-            out_visualized = out_bboxes[idx]
             img = copy.deepcopy(img)
 
         img = img.permute(1, 2, 0).numpy()

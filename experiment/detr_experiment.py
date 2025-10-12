@@ -94,7 +94,7 @@ class DETRExperiment(BaseExperiment, ABC):
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
-            shuffle=True if partition == "train" else False,
+            shuffle=partition == "train",
             num_workers=10,
             collate_fn=collate_fn,
         )
