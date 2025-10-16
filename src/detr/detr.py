@@ -1,5 +1,6 @@
 import torch
 
+from typing import Tuple
 from src.detr.layers import Transformer, get_backbone, get_positional_encoding
 from src.utils import init_weights
 
@@ -17,7 +18,7 @@ class DETR(torch.nn.Module):
     """
 
     def __init__(self, backbone, transformer, d_model, num_classes, num_queries):
-        super(DETR, self).__init__()
+        super().__init__()
         self.backbone = backbone
         self.conv_project = torch.nn.Conv2d(
             backbone.out_channels, d_model, kernel_size=1
@@ -40,7 +41,11 @@ class DETR(torch.nn.Module):
         self.class_embed.apply(init_weights)
         self.bbox_embed.apply(init_weights)
 
-    def forward(self, x, mask: torch.Tensor = None):
+    def forward(
+            self,
+            x: torch.Tensor,
+            mask: torch.Tensor | None = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass of the DETR model.
 

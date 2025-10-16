@@ -1,11 +1,13 @@
 from typing import Dict, List, Tuple
 
 import torch
+from cvrunner.utils.logger import get_cv_logger
 from scipy.optimize import linear_sum_assignment
 
 from src.data.transforms import box_iou, box_iou_matrix
 from src.utils import CONSTANTS
 
+logger = get_cv_logger()
 
 def l_hung(
     labs: torch.Tensor,
@@ -33,7 +35,11 @@ def l_hung(
     loss_label = -torch.log(
         lab_preds.gather(2, labs.unsqueeze(-1)).squeeze(-1)
     )  # [bz x N]
-    loss_label = loss_label.mean()  # Only consider non-empty objects
+    # Downweight the no-object class by 1/1.0
+    no_object_weight = 0.1
+    weights = torch.ones_like(loss_label)
+    weights[labs == CONSTANTS.NO_OBJECT_LABEL] = no_object_weight
+    loss_label = torch.dot(loss_label.flatten(), weights.flatten()) / weights.numel()
     loss_bbox = l_box(bbox, bbox_preds, masks)  # L_box loss
 
     return loss_label + loss_bbox
@@ -58,7 +64,7 @@ def l_box(
     # TODO: Add weights to the losses
     l1_loss = L1_loss(bbox, bbox_preds, mask)
     liou_loss = iou_loss(bbox, bbox_preds, mask)
-    return l1_loss + liou_loss
+    return 5 * l1_loss + 2 * liou_loss
 
 
 def iou_loss(
@@ -169,12 +175,12 @@ class HungarianMatcher(torch.nn.Module):
             cost_class = -pred_probs[:, tgt_labels]  # [N_pred, N_gt]
 
             # L1 bbox cost
-            cost_bbox = torch.cdist(pred_bbox, tgt_bbox, p=1)  # [N_pred, N_gt]
+            cost_bbox = 5 * torch.cdist(pred_bbox, tgt_bbox, p=1)  # [N_pred, N_gt]
 
             # Compute pairwise IoU matrix
             iou_matrix = box_iou_matrix(pred_bbox, tgt_bbox)
 
-            cost_iou = 1 - iou_matrix  # [N_pred, N_gt]
+            cost_iou = 2*(1 - iou_matrix)  # [N_pred, N_gt]
 
             # Final cost matrix
             C = (
@@ -187,6 +193,7 @@ class HungarianMatcher(torch.nn.Module):
             pred_indices, gt_indices = linear_sum_assignment(C)  # [n_gt]
             indices.append((gt_indices, pred_indices))
 
+        logger.info(f"Hungarian matching indices: {indices}")
         return indices  # [bz x (n_gt, n_gt)] n_gt is different for each batch item
 
 
@@ -225,7 +232,8 @@ class DETRLoss(torch.nn.Module):
         Returns:
             torch.Tensor: The computed DETR loss.
         """
-        indices = self.matcher(labs, lab_preds, bbox, bbox_preds)  # [bz x (n_gt)]
+        with torch.no_grad():
+            indices = self.matcher(labs, lab_preds, bbox, bbox_preds)  # [bz x (n_gt)]
         N = lab_preds.shape[1]  # Number of predictions
         device = lab_preds.device
 

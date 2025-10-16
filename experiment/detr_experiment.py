@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Tuple, Type
+from typing import Tuple, Type, Dict, Any
 
 import torch
 from cvrunner.experiment import BaseExperiment, DataBatch, MetricType
@@ -12,7 +12,8 @@ from torch.utils.data import DataLoader
 from experiment.detr_config import DETRConfig
 from runner.detr_runner import DETRRunner
 from src.data.dataset import collate_fn
-from src.data.utils import visualize_output
+from src.data.transforms import box_to_xy
+from src.data.utils import visualize_mask, visualize_output
 from src.detr.detr import build_detr
 from src.losses.loss import DETRLoss
 
@@ -152,7 +153,7 @@ class DETRExperiment(BaseExperiment, ABC):
         output = model(images, masks)
         label = [item.to(device) for item in data_batch["targets"]["labels"]]
         boxes = [item.to(device) for item in data_batch["targets"]["boxes"]]
-        loss, _ = loss_function(label, output[0], boxes, output[1])
+        loss, _ = loss_function(label, output[0], boxes, box_to_xy(output[1]))
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
         optimizer.step()
@@ -172,14 +173,14 @@ class DETRExperiment(BaseExperiment, ABC):
         loss_function: torch.nn.Module,
         criterion: torch.nn.Module = None,
         device: torch.device = torch.device("cpu"),
-    ) -> None:
+    ) -> Dict[str, Any]:
         output_dict = {}
         images = data_batch["images"].to(device)
         masks = data_batch["masks"].to(device)
         label = [item.to(device) for item in data_batch["targets"]["labels"]]
         boxes = [item.to(device) for item in data_batch["targets"]["boxes"]]
         output = model(images, masks)
-        loss, prediction_output = loss_function(label, output[0], boxes, output[1])
+        loss, prediction_output = loss_function(label, output[0], boxes, box_to_xy(output[1]))
         output_dict["val/val_loss"] = loss.item()
         output_dict["labels"] = label
         output_dict["bboxes"] = boxes
@@ -223,7 +224,9 @@ class DETRExperiment(BaseExperiment, ABC):
             gt_labs=gt_labels_list,
             gt_bboxes=gt_boxes_list,
         )
-        output_dict.update({"visualization": output_images})
+
+        output_masks = visualize_mask(masks, image_ids)
+        output_dict.update({"visualization": output_images, "mask_visualization": output_masks})
         return output_dict
 
     def val_epoch_end(self):

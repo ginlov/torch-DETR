@@ -32,7 +32,7 @@ class DETRCPPE5Experiment(DETRExperiment):
 
     @property
     def num_queries(self) -> int:
-        return 100
+        return 10
 
     @property
     def data_folder(self) -> str:

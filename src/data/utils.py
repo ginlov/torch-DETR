@@ -21,7 +21,7 @@ def visualize_output(
 ) -> Dict[int, np.ndarray]:
     """
     Visualize the output of a model along with ground truth labels and bounding boxes.
-    BBoxes are expected to be in normalized [x1, y1, x2, y2] format.
+    BBoxes are expected to be in normalized [x1, y1, w, h] format.
 
     Args:
         imgs (torch.Tensor): Batch of input images of shape (B, C, H, W).
@@ -51,8 +51,13 @@ def visualize_output(
         img = imgs_np[idx]
         w, h = img.shape[2], img.shape[1]
 
-        gt_visualized = gt_bboxes[idx] * torch.tensor([w, h, w, h], dtype=torch.float32) if len(gt_bboxes[idx]) > 0 else gt_bboxes[idx]
-        out_visualized = out_bboxes[idx] * torch.tensor([w, h, w, h], dtype=torch.float32) if len(out_bboxes[idx]) > 0 else out_bboxes[idx]
+        gt_visualized = gt_bboxes[idx] * torch.tensor([w, h, w, h], dtype=torch.float32) \
+        if len(gt_bboxes[idx]) > 0 else gt_bboxes[idx]
+        out_visualized = out_bboxes[idx] * torch.tensor([w, h, w, h], dtype=torch.float32) \
+        if len(out_bboxes[idx]) > 0 else out_bboxes[idx]
+        assert gt_visualized.shape[0] == out_visualized.shape[0], \
+        f"""Ground truth has {gt_visualized.shape[0]} boxes, 
+        but output has {out_visualized.shape[0]} boxes."""
 
         if unormalize:
             # Concatnate gt_bboxes and out_bboxes for unnormalization
@@ -122,3 +127,28 @@ def visualize_output(
         visualized[image_id] = img
 
     return visualized
+
+@torch.no_grad()
+def visualize_mask(
+        masks: torch.Tensor,
+        image_ids: List[int]
+) -> Dict[int, np.ndarray]:
+    """
+    Visualize a binary mask by converting it to a colored image.
+
+    Args:
+        masks (torch.Tensor): Binary masks of images in batch of shape (N, H, W).
+    """
+
+    masks_np = masks.unsqueeze(1).cpu().numpy()
+    N, _, H, W = masks_np.shape
+    visualized = np.zeros((N, H, W, 3), dtype=np.uint8)
+
+    for idx in range(N):
+        mask = masks_np[idx][0]
+        colored_mask = np.zeros((H, W, 3), dtype=np.uint8)
+        colored_mask[mask == 1] = [0, 255, 0]  # Green for mask
+        visualized[idx] = colored_mask
+
+    returned_visualized_masks = {image_id: visualized[idx] for idx, image_id in enumerate(image_ids)}
+    return returned_visualized_masks
