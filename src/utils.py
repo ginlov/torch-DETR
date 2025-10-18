@@ -70,3 +70,29 @@ def cal_grad_norm(model: torch.nn.Module) -> Dict:
             norm = torch.norm(param.grad, p=2).item()
             grad_norm[f"grad_norm/{name}"] = norm
     return grad_norm
+
+def get_warmup_cosine_schedule(
+    optimizer: torch.optim.Optimizer,
+    num_warmup_steps: int,
+    num_training_steps: int
+):
+    """
+    Create a schedule with a learning rate that decreases linearly after a warmup period.
+
+    Args:
+        optimizer (torch.optim.Optimizer): The optimizer for which to schedule the learning rate.
+        num_warmup_steps (int): The number of steps for the warmup phase.
+        num_training_steps (int): The total number of training steps.
+
+    Rteturns:
+        torch.optim.lr_scheduler.LambdaLR: The learning rate scheduler.
+    """
+    def lr_lambda(current_step: int):
+        if current_step < num_warmup_steps:
+            return max(1e-2, float(current_step) / float(max(1, num_warmup_steps)))
+        progress = float(current_step - num_warmup_steps) / float(
+            max(1, num_training_steps - num_warmup_steps)
+        )
+        return max(1e-3, 0.5 * (1.0 + torch.cos(torch.pi * torch.tensor(progress))))
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)

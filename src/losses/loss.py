@@ -15,7 +15,10 @@ def l_hung(
     bbox: torch.Tensor,
     bbox_preds: torch.Tensor,
     masks: torch.Tensor,
-) -> torch.Tensor:
+    label_loss_weight: float = 1.0,
+    l1_loss_weight: float = 1.0,
+    iou_loss_weight: float = 1.0,
+) -> Dict[str, torch.Tensor]:
     """
     Compute the matching loss between ground truth and predictions.
     BBoxes must be in normalized [x1, y1, x2, y2] format.
@@ -40,16 +43,25 @@ def l_hung(
     weights = torch.ones_like(loss_label)
     weights[labs == CONSTANTS.NO_OBJECT_LABEL] = no_object_weight
     loss_label = torch.dot(loss_label.flatten(), weights.flatten()) / weights.numel()
-    loss_bbox = l_box(bbox, bbox_preds, masks)  # L_box loss
+    loss_bbox = l_box(bbox, bbox_preds, masks, l1_loss_weight, iou_loss_weight)  # L_box loss
 
-    return loss_label + loss_bbox
+    returned_losses = {
+        "loss_label": label_loss_weight * loss_label,
+        "loss_bbox": loss_bbox["total_box_loss"],
+        "l1_loss": loss_bbox["l1_loss"],
+        "liou_loss": loss_bbox["liou_loss"],
+        "total_loss": label_loss_weight * loss_label + loss_bbox["total_box_loss"],
+    }
+    return returned_losses
 
 
 def l_box(
     bbox: torch.Tensor,
     bbox_preds: torch.Tensor,
-    mask: torch.Tensor
-) -> torch.Tensor:
+    mask: torch.Tensor,
+    l1_loss_weight: float = 1.0,
+    iou_loss_weight: float = 1.0,
+) -> Dict[str, torch.Tensor]:
     """
     Compute the bounding box loss.
     BBoxes must be in normalized [x1, y1, x2, y2] format.
@@ -64,7 +76,12 @@ def l_box(
     # TODO: Add weights to the losses
     l1_loss = L1_loss(bbox, bbox_preds, mask)
     liou_loss = iou_loss(bbox, bbox_preds, mask)
-    return 5 * l1_loss + 2 * liou_loss
+    returned_losses = {
+        "l1_loss": l1_loss_weight*l1_loss,
+        "liou_loss": iou_loss_weight*liou_loss,
+        "total_box_loss": l1_loss_weight * l1_loss + iou_loss_weight * liou_loss,
+    }
+    return returned_losses
 
 
 def iou_loss(
@@ -123,11 +140,11 @@ class HungarianMatcher(torch.nn.Module):
     This class computes an assignment between the targets and the predictions of the network.
     """
 
-    def __init__(self):
+    def __init__(self, cost_class: float = 1.0, cost_bbox: float = 1.0, cost_iou: float = 1.0):
         super().__init__()
-        self.cost_class = 1.0
-        self.cost_bbox = 1.0
-        self.cost_iou = 1.0
+        self.cost_class = cost_class
+        self.cost_bbox = cost_bbox
+        self.cost_iou = cost_iou
 
     @torch.no_grad()
     def forward(
@@ -175,12 +192,12 @@ class HungarianMatcher(torch.nn.Module):
             cost_class = -pred_probs[:, tgt_labels]  # [N_pred, N_gt]
 
             # L1 bbox cost
-            cost_bbox = 5 * torch.cdist(pred_bbox, tgt_bbox, p=1)  # [N_pred, N_gt]
+            cost_bbox = torch.cdist(pred_bbox, tgt_bbox, p=1)  # [N_pred, N_gt]
 
             # Compute pairwise IoU matrix
             iou_matrix = box_iou_matrix(pred_bbox, tgt_bbox)
 
-            cost_iou = 2*(1 - iou_matrix)  # [N_pred, N_gt]
+            cost_iou = (1 - iou_matrix)  # [N_pred, N_gt]
 
             # Final cost matrix
             C = (
@@ -203,12 +220,19 @@ class DETRLoss(torch.nn.Module):
     It contains the classification loss and the bounding box loss and also the IoU loss.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        cost_class: float = 1.0,
+        cost_l1: float = 1.0,
+        cost_iou: float = 1.0,
+        *args,
+        **kwargs
+    ):
         super().__init__(*args, **kwargs)
-        self.cost_class = 1.0
-        self.cost_bbox = 1.0
-        self.cost_iou = 1.0
-        self.matcher = HungarianMatcher()
+        self.cost_class: float = cost_class
+        self.cost_l1: float = cost_l1
+        self.cost_iou: float = cost_iou
+        self.matcher = HungarianMatcher(self.cost_class, self.cost_l1, self.cost_iou)
 
     def forward(
         self,
@@ -216,7 +240,7 @@ class DETRLoss(torch.nn.Module):
         lab_preds: torch.Tensor,
         bbox: List[torch.Tensor],
         bbox_preds: torch.Tensor,
-    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         """
         Compute the DETR loss.
         BBoxes must be in normalized [x1, y1, x2, y2] format.
@@ -307,7 +331,14 @@ class DETRLoss(torch.nn.Module):
 
         return (
             l_hung(
-                batched_labs, batched_lab_preds, batched_bbox, batched_bbox_preds, masks
+                batched_labs,
+                batched_lab_preds,
+                batched_bbox,
+                batched_bbox_preds,
+                masks,
+                self.cost_class,
+                self.cost_l1,
+                self.cost_iou
             ),
             prediction_output,
         )

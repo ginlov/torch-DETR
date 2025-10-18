@@ -17,6 +17,10 @@ logger = get_cv_logger()
 class DETRRunner(TrainRunner):
     def __init__(self, experiment: type["DETRExperiment"]):
         super().__init__(experiment=experiment)
+        self.optimizer, self.lr_scheduler = self.experiment.build_optimizer_scheduler(
+            model=self.model,
+            len_dataloader =len(self.train_dataloader),
+        )
         logger.info(f"Model config: {self.experiment.detr_config}")
         self.valid_outputs = {
             "labels": [],
@@ -57,6 +61,14 @@ class DETRRunner(TrainRunner):
 
             grad_norm = cal_grad_norm(self.model)
             logger.log_metrics(grad_norm, local_step=self.step)
+
+            logger.log_metrics(
+                {
+                    "lr_backbone": self.lr_scheduler.get_last_lr()[0],
+                    "lr_detr": self.lr_scheduler.get_last_lr()[1]
+                },
+                local_step=self.step,
+            )
 
     def val_epoch_start(self):
         super().val_epoch_start()

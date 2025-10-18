@@ -77,6 +77,19 @@ class DETRExperiment(BaseExperiment, ABC):
     def num_epochs(self) -> int:
         return 1
 
+    # Loss config
+    @property
+    def label_loss_weight(self) -> float:
+        return 1.0
+
+    @property
+    def l1_bbox_loss_weight(self) -> float:
+        return 1.0
+
+    @property
+    def giou_bbox_loss_weight(self) -> float:
+        return 1.0
+
     def build_model(self) -> torch.nn.Module:
         return build_detr(
             backbone_name=self.backbone_name,
@@ -101,7 +114,7 @@ class DETRExperiment(BaseExperiment, ABC):
         )
 
     def build_optimizer_scheduler(
-        self, model: torch.nn.Module
+        self, model: torch.nn.Module, len_dataloader: int = 0
     ) -> Tuple[Optimizer, _LRScheduler]:
         backbone_params = list(
             p for _, p in model.backbone.named_parameters() if p.requires_grad
@@ -114,8 +127,8 @@ class DETRExperiment(BaseExperiment, ABC):
 
         optimizer = AdamW(
             [
-                {"params": backbone_params, "lr": 0.0},
-                {"params": other_params, "lr": 1e-4},
+                {"params": backbone_params, "lr": 1e-4},
+                {"params": other_params, "lr": 1e-3},
             ],
             weight_decay=self.weight_decay,
         )
@@ -125,7 +138,7 @@ class DETRExperiment(BaseExperiment, ABC):
 
     def build_loss_function(self) -> DETRLoss:
         # TODO: correct this loss function
-        return DETRLoss()
+        return DETRLoss(self.label_loss_weight, self.l1_bbox_loss_weight, self.giou_bbox_loss_weight)
 
     def save_checkpoint(self) -> None:
         pass
@@ -152,11 +165,11 @@ class DETRExperiment(BaseExperiment, ABC):
         label = [item.to(device) for item in data_batch["targets"]["labels"]]
         boxes = [item.to(device) for item in data_batch["targets"]["boxes"]]
         loss, _ = loss_function(label, output[0], boxes, box_to_xy(output[1]))
-        loss.backward()
+        loss["total_loss"].backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
         optimizer.step()
         lr_scheduler.step()
-        return {"loss": loss.item()}
+        return {key: val.item() for key, val in loss.items()}
 
     def train_epoch_end(self):
         pass
@@ -179,7 +192,8 @@ class DETRExperiment(BaseExperiment, ABC):
         boxes = [item.to(device) for item in data_batch["targets"]["boxes"]]
         output = model(images, masks)
         loss, prediction_output = loss_function(label, output[0], boxes, box_to_xy(output[1]))
-        output_dict["val/val_loss"] = loss.item()
+        for key in loss.keys():
+            output_dict[f"val/{key}"] = loss[key].item()
         output_dict["labels"] = label
         output_dict["bboxes"] = boxes
         output_dict["pred_logits"] = output[0]
