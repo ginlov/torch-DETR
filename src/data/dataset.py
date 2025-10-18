@@ -143,6 +143,12 @@ class CPPE5Dataset(DETRDataset):
                     ]
                 )
 
+
+            if sanity_check:
+                transform = T.Compose(
+                    [normalize]
+                )
+
         self.transform = transform
 
         ## Load images
@@ -176,16 +182,19 @@ class CPPE5Dataset(DETRDataset):
 
         if sanity_check:
             if partition == "train":
-                self.images = self.images[:100]
-                self.boxes = self.boxes[:100]
-                self.labels = self.labels[:100]
+                self.images = self.images[:1]
+                self.boxes = self.boxes[:1]
+                self.labels = self.labels[:1]
             else:
-                self.images = self.images[:20]
-                self.boxes = self.boxes[:20]
-                self.labels = self.labels[:20]
+                self.images = self.images[:1]
+                self.boxes = self.boxes[:1]
+                self.labels = self.labels[:1]
 
 
 def collate_fn(batch):
+    """
+    Returned bboxes are in [x1, y1, x2, y2] format (normalized).
+    """
     images = [item[0] for item in batch]  # various sizes
     targets = [item[1] for item in batch]  # various number of boxes for each image
 

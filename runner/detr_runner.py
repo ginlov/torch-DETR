@@ -62,10 +62,6 @@ class DETRRunner(TrainRunner):
         super().val_epoch_start()
         self.valid_outputs = {k: [] for k in self.valid_outputs}
 
-    def val_epoch(self):
-        for data in self.val_dataloader:
-            self.val_step(data)
-
     def val_step(self, data: Any):
         with torch.no_grad():
             outputs = self.experiment.val_step(

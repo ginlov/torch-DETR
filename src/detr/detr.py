@@ -37,7 +37,6 @@ class DETR(torch.nn.Module):
 
         # Initialize weights to make training consistent
         self.conv_project.apply(init_weights)
-        self.query_embedding.apply(init_weights)
         self.class_embed.apply(init_weights)
         self.bbox_embed.apply(init_weights)
 

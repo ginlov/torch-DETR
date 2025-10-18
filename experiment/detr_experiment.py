@@ -96,7 +96,7 @@ class DETRExperiment(BaseExperiment, ABC):
             dataset,
             batch_size=self.batch_size,
             shuffle=partition == "train",
-            num_workers=10,
+            num_workers=5,
             collate_fn=collate_fn,
         )
 
@@ -145,11 +145,9 @@ class DETRExperiment(BaseExperiment, ABC):
         lr_scheduler: _LRScheduler,
         device: torch.device,
     ) -> MetricType:
-        # TODO: correct this logic
         optimizer.zero_grad()
         images = data_batch["images"].to(device)
         masks = data_batch["masks"].to(device)
-        # label, boxes = pad_targets(data_batch['targets'], self.num_queries)
         output = model(images, masks)
         label = [item.to(device) for item in data_batch["targets"]["labels"]]
         boxes = [item.to(device) for item in data_batch["targets"]["boxes"]]
@@ -225,8 +223,7 @@ class DETRExperiment(BaseExperiment, ABC):
             gt_bboxes=gt_boxes_list,
         )
 
-        output_masks = visualize_mask(masks, image_ids)
-        output_dict.update({"visualization": output_images, "mask_visualization": output_masks})
+        output_dict.update({"visualization": output_images})
         return output_dict
 
     def val_epoch_end(self):

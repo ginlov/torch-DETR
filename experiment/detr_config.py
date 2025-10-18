@@ -18,4 +18,4 @@ class DETRCPPEConfigSanityCheck(DETRConfig):
     num_encoder_layers: int = 3
     num_decoder_layers: int = 3
     dim_feedforward: int = 512
-    dropout: float = 0.1
+    dropout: float = 0.0

@@ -27,6 +27,10 @@ class DETRCPPE5Experiment(DETRExperiment):
         return 50 if not self.sanity_check else 50
 
     @property
+    def batch_size(self) -> int:
+        return 1
+
+    @property
     def num_classes(self) -> int:
         return 5  # CPPE-5 has 5 classes
 
