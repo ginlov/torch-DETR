@@ -210,7 +210,6 @@ class HungarianMatcher(torch.nn.Module):
             pred_indices, gt_indices = linear_sum_assignment(C)  # [n_gt]
             indices.append((gt_indices, pred_indices))
 
-        logger.info(f"Hungarian matching indices: {indices}")
         return indices  # [bz x (n_gt, n_gt)] n_gt is different for each batch item
 
 

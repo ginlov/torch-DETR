@@ -25,8 +25,8 @@ def test_visualize_output():
     ]
     gt_labs = [torch.tensor([1]), torch.tensor([2, 3])]
     gt_bboxes = [
-        torch.tensor([[0.1, 0.1, 0.2, 0.2]]),
         torch.tensor([[0.5, 0.5, 0.6, 0.6], [0.7, 0.7, 0.8, 0.8]]),
+        torch.tensor([[0.1, 0.1, 0.2, 0.2]]),
     ]
     output = visualize_output(
         images, masks, image_ids, out_labs, out_bboxes, gt_labs, gt_bboxes

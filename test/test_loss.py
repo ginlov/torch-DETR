@@ -31,7 +31,7 @@ def test_l_hung_perfect_match():
     loss = l_hung(
         labs, lab_preds, bbox, bbox_preds, torch.ones_like(labs, dtype=torch.bool)
     )
-    print(loss)
+    loss = loss['total_loss']
     assert loss > 0, f"l_hung loss should be positive all time, got {loss.item()}"
     assert (
         loss < 1e-4
@@ -52,6 +52,7 @@ def test_l_hung_imperfect_match():
     loss = l_hung(
         labs, lab_preds, bbox, bbox_preds, torch.ones_like(labs, dtype=torch.bool)
     )
+    loss = loss['total_loss']
     assert loss > 0, "l_hung loss should be positive for imperfect match"
 
 
@@ -96,6 +97,7 @@ def test_l_box_combined_loss():
     bbox_preds = torch.tensor([[[0.2, 0.2, 0.6, 0.5], [0.1, 0.1, 0.3, 0.3]]])
     mask = torch.tensor([[1, 1]], dtype=torch.bool)
     loss = l_box(bbox, bbox_preds, mask)
+    loss = loss['total_box_loss']
     assert loss >= 0, "Combined loss should be positive for imperfect match"
 
 
@@ -133,6 +135,7 @@ def test_detr_loss_perfect_match():
     bbox = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
     bbox_preds = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
     loss, _ = detr_loss(labs, lab_preds, bbox, bbox_preds)
+    loss = loss['total_loss']
     assert loss >= 0, f"DETR loss should be positive all time, got {loss.item()}"
     assert (
         loss < 1e-4
@@ -151,6 +154,7 @@ def test_detr_loss_imperfect_match():
     bbox = torch.tensor([[[0.2, 0.2, 0.5, 0.5], [0.1, 0.1, 0.2, 0.3]]])
     bbox_preds = torch.tensor([[[0.2, 0.2, 0.6, 0.5], [0.1, 0.1, 0.3, 0.3]]])
     loss, _ = detr_loss(labs, lab_preds, bbox, bbox_preds)
+    loss = loss['total_loss']
     assert loss >= 0, "DETR loss should be positive for imperfect match"
 
 
@@ -201,9 +205,9 @@ def test_detr_can_improve_on_detr_loss():
         optimizer.zero_grad()
         class_preds, bbox_preds = model(dummy_input)
         loss, _ = loss_fn(target_labels, class_preds, target_boxes, bbox_preds)
-        loss.backward()
+        loss['total_loss'].backward()
         optimizer.step()
-        losses.append(loss.item())
+        losses.append(loss['total_loss'].item())
 
     N = 50
     first_avg = sum(losses[:N]) / N

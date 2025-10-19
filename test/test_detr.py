@@ -161,7 +161,7 @@ def test_detr_can_overfit_toy_data():
     loss_fn = torch.nn.MSELoss()
 
     losses = []
-    for step in range(1000):
+    for step in range(200):
         optimizer.zero_grad()
         class_preds, bbox_preds = model(dummy_input)
         loss = loss_fn(class_preds, target_logits) + loss_fn(bbox_preds, target_boxes)

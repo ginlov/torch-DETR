@@ -32,7 +32,7 @@ class DETRCPPE5Experiment(DETRExperiment):
 
     @property
     def batch_size(self) -> int:
-        return 1
+        return 4
 
     @property
     def num_classes(self) -> int:
@@ -105,7 +105,7 @@ class DETRCPPE5Experiment(DETRExperiment):
         optimizer = AdamW(
             [
                 {"params": backbone_params, "lr": 1e-4},
-                {"params": other_params, "lr": 1e-4},
+                {"params": other_params, "lr": 1e-3},
             ],
             weight_decay=self.weight_decay,
         )
